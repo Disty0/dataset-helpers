@@ -49,8 +49,6 @@ for image in tqdm(glob.glob('./*.jpg')):
             prediction = prediction_single[0]["score"]
         elif prediction_single[1]["label"] == "hq":
             prediction = prediction_single[1]["score"]
-        else:
-            assert "No predict found"
         copy_image(image, prediction)
     except Exception as e:
         print(f"ERROR: {image} MESSAGE: {e}")
