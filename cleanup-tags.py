@@ -6,18 +6,7 @@ import glob
 
 from tqdm import tqdm
 
-tag_list = [
-    [", o o, ", ", o_o, "],
-    [", 0 0, ", ", 0_0, "],
-    [", 1 1, ", ", 1_1, "],
-    [", u u, ", ", u_u, "],
-    [", x x, ", ", x_x, "],
-    [", o o\n", ", o_o\n"],
-    [", 0 0\n", ", 0_0\n"],
-    [", 1 1\n", ", 1_1\n"],
-    [", u u\n", ", u_u\n"],
-    [", x x\n", ", x_x\n"],
-]
+from tag_list import tag_list
 
 steps_after_gc = 0
 
@@ -34,11 +23,12 @@ def write_error(text):
 def write_tag(file_name):
     global tag_list
     caption_file = open(file_name, "r+")
-    new_file_name = "/home/disty/dataset" + os.getcwd() +  file_name[1:]
-    os.makedirs(os.path.dirname(new_file_name), exist_ok=True)
-    caption_file_2 = open(new_file_name, "w")
+    #new_file_name = "/home/disty/dataset" + os.getcwd() +  file_name[1:]
+    #os.makedirs(os.path.dirname(new_file_name), exist_ok=True)
+    #caption_file_2 = open(new_file_name, "w")
     tags = caption_file.readlines()[0]
     caption_file.close()
+    caption_file_2 = open(file_name, "w")
     for old_tag, new_tag in tag_list:
         tags = tags.replace(old_tag, new_tag)
     caption_file_2.write(tags)

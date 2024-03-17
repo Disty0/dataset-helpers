@@ -19,7 +19,9 @@ def write_caption_to_file(file_name, text):
     caption_file.close()
 
 os.makedirs(os.path.dirname("errors/errors.txt"), exist_ok=True)
+os.makedirs(os.path.dirname("out/lowres.txt"), exist_ok=True)
 open("errors/errors.txt", 'a').close()
+open("out/lowres.txt", 'a').close()
 
 print("Searching for JPG files...")
 
@@ -27,9 +29,8 @@ for image in tqdm(glob.glob('./**/*.jpg')):
     try:
         im = Image.open(image)
         im_height, im_width = im.size
-        if im_height * im_width > 4194304: # 2048x2048
-            im.thumbnail((2048,2048), Image.Resampling.LANCZOS)
-            im.save(image, "JPEG", quality=92, optimize=True, subsampling=0)
+        if im_height * im_width < 768000:
+            write_caption_to_file("out/lowres.txt", f"\n{im_height}x{im_width}   :   {image}")
         im.close()
     except Exception as e:
         print(f"ERROR: {image} MESSAGE: {e}")

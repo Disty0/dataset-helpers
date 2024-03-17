@@ -12,12 +12,30 @@ from tqdm import tqdm
 pipe = pipeline("image-classification", model="shadowlilac/aesthetic-shadow", device="cuda")
 steps_after_gc = 0
 
+def remove_old_tag(text):
+    text = text.removeprefix("out of the scale aesthetic, ")
+    text = text.removeprefix("masterpiece, ")
+    text = text.removeprefix("extremely aesthetic, ")
+    text = text.removeprefix("very aesthetic, ")
+    text = text.removeprefix("asthetic, ")
+    text = text.removeprefix("aesthetic, ")
+    text = text.removeprefix("slightly asthetic, ")
+    text = text.removeprefix("slightly aesthetic, ")
+    text = text.removeprefix("not displeasing, ")
+    text = text.removeprefix("not asthetic, ")
+    text = text.removeprefix("not aesthetic, ")
+    text = text.removeprefix("slightly displeasing, ")
+    text = text.removeprefix("displeasing, ")
+    text = text.removeprefix("very displeasing, ")
+    return text
+
 def write_caption_to_file(file_name, text):
     caption_file = open(file_name, "r+")
     lines = caption_file.readlines()
     caption_file.seek(0)
     caption_file.write(text)
     for line in lines:
+        line = remove_old_tag(line)
         caption_file.write(line)
     caption_file.close()
     
@@ -31,13 +49,13 @@ def write_caption(file_name, score):
     elif score > 0.90:
         write_caption_to_file(file_name, "very aesthetic, ")
     elif score > 0.75:
-        write_caption_to_file(file_name, "asthetic, ")
+        write_caption_to_file(file_name, "aesthetic, ")
     elif score > 0.50:
-        write_caption_to_file(file_name, "slightly asthetic, ")
+        write_caption_to_file(file_name, "slightly aesthetic, ")
     elif score > 0.35:
         write_caption_to_file(file_name, "not displeasing, ")
     elif score > 0.25:
-        write_caption_to_file(file_name, "not asthetic, ")
+        write_caption_to_file(file_name, "not aesthetic, ")
     elif score > 0.125:
         write_caption_to_file(file_name, "slightly displeasing, ")
     elif score > 0.025:

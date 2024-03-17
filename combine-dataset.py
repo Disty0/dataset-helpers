@@ -22,6 +22,10 @@ def write_caption_to_file(file_name, text):
     caption_file.close()
 
 os.makedirs(os.path.dirname("errors/errors.txt"), exist_ok=True)
+try:
+    shutil.move("../moved_dataset", "../moved_dataset_old")
+except Exception:
+    pass
 os.makedirs(os.path.dirname(f"../moved_dataset/{str(shard).zfill(4)}/"), exist_ok=True)
 open("errors/errors.txt", 'a').close()
 
@@ -35,7 +39,7 @@ for txt_file in tqdm(file_list):
         shutil.move(txt_file, f"../moved_dataset/{str(shard).zfill(4)}/{str(count).zfill(8)}.txt")
         count = count + 1
         count_shard = count_shard + 1
-        if count_shard >= 256000:
+        if count_shard >= 128000:
             shard = shard + 1
             os.makedirs(os.path.dirname(f"../moved_dataset/{str(shard).zfill(4)}/"), exist_ok=True)
             count_shard = 0

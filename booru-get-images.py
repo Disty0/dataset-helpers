@@ -8,7 +8,7 @@ from tqdm import tqdm
 pybooru.resources.SITE_LIST["shima"] = {"url": "https://shima.donmai.us/"}
 client = pybooru.Danbooru('shima')
 
-for id in tqdm(range(6759759, 7300000)):
+for id in tqdm(range(7309999, 7310001)):
     try:
         image_data = client.post_show(id)
         image = Image.open(requests.get(image_data["file_url"], stream=True).raw).convert('RGBA')
