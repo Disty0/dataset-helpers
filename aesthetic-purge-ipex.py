@@ -5,11 +5,12 @@ import gc
 import shutil
 import glob
 import torch
+import intel_extension_for_pytorch as ipex
 
 from transformers import pipeline
 from tqdm import tqdm
 
-pipe = pipeline("image-classification", model="shadowlilac/aesthetic-shadow", device="cuda")
+pipe = pipeline("image-classification", model="shadowlilac/aesthetic-shadow", device="xpu")
 steps_after_gc = 0
 
 
@@ -23,7 +24,7 @@ def write_caption_to_file(file_name, text):
     caption_file.close()
     
 def move_image(image, score):
-    if score < 0.90:
+    if score < 0.98:
         os.makedirs(os.path.dirname(f"bad/{image[2:]}"), exist_ok=True)
         shutil.move(image, f"bad/{image[2:]}")
         try:
@@ -65,8 +66,8 @@ for image in tqdm(glob.glob('./*.jpg')):
 
     steps_after_gc = steps_after_gc + 1
     if steps_after_gc >= 10000:
-        torch.cuda.synchronize()
-        torch.cuda.empty_cache()
+        torch.xpu.synchronize()
+        torch.xpu.empty_cache()
         gc.collect()
         steps_after_gc = 0
 

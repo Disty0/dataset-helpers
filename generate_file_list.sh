@@ -24,10 +24,10 @@ echo "Mid"
 for i in mid/*/*.jpg; do echo "$i" >> ../jpg_list/mid_jpg_list.txt; done
 for i in mid/*/*.txt; do echo "$i" >> ../txt_list/mid_txt_list.txt; done
 
-echo "Late"
+echo "Recent"
 
-for i in late/*/*.jpg; do echo "$i" >> ../jpg_list/late_jpg_list.txt; done
-for i in late/*/*.txt; do echo "$i" >> ../txt_list/late_txt_list.txt; done
+for i in recent/*/*.jpg; do echo "$i" >> ../jpg_list/recent_jpg_list.txt; done
+for i in recent/*/*.txt; do echo "$i" >> ../txt_list/recent_txt_list.txt; done
 
 echo "Newest"
 
