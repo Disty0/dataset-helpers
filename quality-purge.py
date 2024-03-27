@@ -5,6 +5,10 @@ import gc
 import shutil
 import glob
 import torch
+try:
+    import intel_extension_for_pytorch as ipex
+except Exception:
+    pass
 
 from transformers import CLIPModel, CLIPProcessor
 import numpy as np
@@ -12,7 +16,7 @@ from PIL import Image
 from tqdm import tqdm
 
 
-device = "cuda"
+device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
 aesthetic_path = '/mnt/DataSSD/AI/models/aes-B32-v0.pth'
 clip_name = 'openai/clip-vit-base-patch32'
 steps_after_gc = 0
@@ -71,18 +75,23 @@ def move_image(image, score):
 
 clipprocessor = CLIPProcessor.from_pretrained(clip_name)
 clipmodel = CLIPModel.from_pretrained(clip_name).to(device).eval()
+if "xpu" in device:
+    clipmodel = ipex.optimize(clipmodel, dtype=torch.float32, inplace=True, weights_prepack=False)
 
 aes_model = Classifier(512, 256, 1).to("cpu")
 aes_model.load_state_dict(torch.load(aesthetic_path, map_location="cpu"))
 aes_model = aes_model.eval().to(device)
+if "xpu" in device:
+    aes_model = ipex.optimize(aes_model, dtype=torch.float32, inplace=True, weights_prepack=False)
+
+print("Searching for JPG files...")
+file_list = glob.glob('./*.jpg')
 
 os.makedirs(os.path.dirname("errors/errors.txt"), exist_ok=True)
 os.makedirs(os.path.dirname("bad/"), exist_ok=True)
 open("errors/errors.txt", 'a').close()
 
-print("Searching for JPG files...")
-
-for image in tqdm(glob.glob('./*.jpg')):
+for image in tqdm(file_list):
     try:
         image_embeds = image_embeddings(image, clipmodel, clipprocessor)
         prediction = aes_model(torch.from_numpy(image_embeds).float().to(device))
@@ -103,8 +112,8 @@ for image in tqdm(glob.glob('./*.jpg')):
 
     steps_after_gc = steps_after_gc + 1
     if steps_after_gc >= 10000:
-        torch.cuda.synchronize()
-        torch.cuda.empty_cache()
+        getattr(torch, torch.device(device).type).synchronize()
+        getattr(torch, torch.device(device).type).empty_cache()
         gc.collect()
         steps_after_gc = 0
 

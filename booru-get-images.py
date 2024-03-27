@@ -23,6 +23,6 @@ for id in tqdm(range(7309999, 7310001)):
         caption_file = open(f"{id}.txt", "w")
         caption_file.write(image_data["tag_string"].replace(" ", ", ").replace("_", " "))
         caption_file.close()
-    except Exception as e:
+    except Exception:
         pass
 

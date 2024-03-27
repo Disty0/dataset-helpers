@@ -21,6 +21,10 @@ def write_caption_to_file(file_name, text):
         caption_file.write(line)
     caption_file.close()
 
+print("Searching for TXT files...")
+file_list = glob.glob('./**/*.txt')
+random.shuffle(file_list)
+
 os.makedirs(os.path.dirname("errors/errors.txt"), exist_ok=True)
 try:
     shutil.move("../moved_dataset", "../moved_dataset_old")
@@ -28,10 +32,6 @@ except Exception:
     pass
 os.makedirs(os.path.dirname(f"../moved_dataset/{str(shard).zfill(4)}/"), exist_ok=True)
 open("errors/errors.txt", 'a').close()
-
-print("Searching for TXT files...")
-file_list = glob.glob('./**/*.txt')
-random.shuffle(file_list)
 
 for txt_file in tqdm(file_list):
     try:

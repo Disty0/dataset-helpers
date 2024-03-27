@@ -34,12 +34,13 @@ def write_tag(file_name):
     caption_file_2.write(tags)
     caption_file_2.close()
 
+print("Searching for TXT files...")
+file_list = glob.glob('./**/*.txt')
+
 os.makedirs(os.path.dirname("errors/errors.txt"), exist_ok=True)
 open("errors/errors.txt", 'a').close()
 
-print("Searching for TXT files...")
-
-for text in tqdm(glob.glob('./**/*.txt')):
+for text in tqdm(file_list):
     try:
         write_tag(text)
     except Exception as e:

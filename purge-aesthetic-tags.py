@@ -39,13 +39,13 @@ def write_caption_to_file(file_name):
         caption_file.write(line)
     caption_file.close()
     
+print("Searching for TXT files...")
+file_list = glob.glob('./*.txt')
 
 os.makedirs(os.path.dirname("errors/errors.txt"), exist_ok=True)
 open("errors/errors.txt", 'a').close()
 
-print("Searching for TXT files...")
-
-for text in tqdm(glob.glob('./*.txt')):
+for text in tqdm(file_list):
     try:
         write_caption_to_file(text)
     except Exception as e:

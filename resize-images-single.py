@@ -18,12 +18,13 @@ def write_caption_to_file(file_name, text):
         caption_file.write(line)
     caption_file.close()
 
+print("Searching for JPG files...")
+file_list = glob.glob('./*.jpg')
+
 os.makedirs(os.path.dirname("errors/errors.txt"), exist_ok=True)
 open("errors/errors.txt", 'a').close()
 
-print("Searching for JPG files...")
-
-for image in tqdm(glob.glob('./*.jpg')):
+for image in tqdm(file_list):
     try:
         im = Image.open(image)
         im_height, im_width = im.size

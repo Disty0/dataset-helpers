@@ -5,11 +5,16 @@ import gc
 import shutil
 import glob
 import torch
+try:
+    import intel_extension_for_pytorch as ipex
+except Exception:
+    pass
 
 from transformers import pipeline
 from tqdm import tqdm
 
-pipe = pipeline("image-classification", model="shadowlilac/aesthetic-shadow", device="cuda")
+device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
+pipe = pipeline("image-classification", model="shadowlilac/aesthetic-shadow-v2", device=device)
 steps_after_gc = 0
 
 
@@ -23,7 +28,7 @@ def write_caption_to_file(file_name, text):
     caption_file.close()
     
 def move_image(image, score):
-    if score < 0.98:
+    if score < 0.80:
         os.makedirs(os.path.dirname(f"bad/{image[2:]}"), exist_ok=True)
         shutil.move(image, f"bad/{image[2:]}")
         try:
@@ -35,13 +40,14 @@ def move_image(image, score):
         except Exception:
             pass
 
+print("Searching for JPG files...")
+file_list = glob.glob('./*.jpg')
+
 os.makedirs(os.path.dirname("errors/errors.txt"), exist_ok=True)
 os.makedirs(os.path.dirname("bad/"), exist_ok=True)
 open("errors/errors.txt", 'a').close()
 
-print("Searching for JPG files...")
-
-for image in tqdm(glob.glob('./*.jpg')):
+for image in tqdm(file_list):
     try:
         prediction_single = pipe(images=[image])[0]
         if prediction_single[0]["label"] == "hq":
@@ -65,8 +71,8 @@ for image in tqdm(glob.glob('./*.jpg')):
 
     steps_after_gc = steps_after_gc + 1
     if steps_after_gc >= 10000:
-        torch.cuda.synchronize()
-        torch.cuda.empty_cache()
+        getattr(torch, torch.device(device).type).synchronize()
+        getattr(torch, torch.device(device).type).empty_cache()
         gc.collect()
         steps_after_gc = 0
 

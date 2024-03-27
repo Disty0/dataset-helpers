@@ -29,6 +29,9 @@ def write_tag(file_name):
     for word in tags.replace(",", "").rsplit(" "):
         words_list.write(word + "\n")
 
+print("Searching for TXT files...")
+file_list = glob.glob('./**/**/*.txt')
+
 os.makedirs(os.path.dirname("errors/errors.txt"), exist_ok=True)
 os.makedirs(os.path.dirname("out/txt_list.txt"), exist_ok=True)
 os.makedirs(os.path.dirname("out/tags_list.txt"), exist_ok=True)
@@ -41,9 +44,7 @@ tags_list = open("out/tags_list.txt", 'w')
 tags_file_list = open("out/tags_file_list.txt", 'w')
 words_list = open("out/words_list.txt", 'w')
 
-print("Searching for TXT files...")
-
-for text in tqdm(glob.glob('./**/**/*.txt')):
+for text in tqdm(file_list):
     try:
         write_tag(text)
     except Exception as e:
