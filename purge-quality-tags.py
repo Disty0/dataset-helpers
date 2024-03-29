@@ -24,15 +24,12 @@ def remove_old_tag(text):
     return text
 
 def write_caption_to_file(file_name):
-    caption_file = open(file_name, "r+")
-    lines = caption_file.readlines()
-    caption_file = open(file_name, "r+")
+    caption_file = open(file_name, "r")
+    line = caption_file.readlines()[0]
     caption_file.close()
     caption_file = open(file_name, "w")
     caption_file.seek(0)
-    for line in lines:
-        line = remove_old_tag(line)
-        caption_file.write(line)
+    line = remove_old_tag(line)
     caption_file.close()
     
 
