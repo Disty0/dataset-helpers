@@ -77,7 +77,8 @@ open("errors/errors.txt", 'a').close()
 
 for image in tqdm(file_list):
     try:
-        prediction_single = pipe(images=[image])[0]
+        with torch.inference_mode():
+            prediction_single = pipe(images=[image])[0]
         if prediction_single[0]["label"] == "hq":
             prediction = prediction_single[0]["score"]
         elif prediction_single[1]["label"] == "hq":

@@ -4,6 +4,7 @@ import os
 import gc
 import shutil
 import glob
+import random
 from tqdm import tqdm
 
 steps_after_gc = 0
@@ -22,6 +23,7 @@ def write_caption_to_file(file_name, text):
 
 print("Searching for TXT files...")
 file_list = glob.glob('./*.txt')
+random.shuffle(file_list)
 
 os.makedirs(os.path.dirname("errors/errors.txt"), exist_ok=True)
 try:

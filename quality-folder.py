@@ -114,8 +114,9 @@ open("errors/errors.txt", 'a').close()
 
 for image in tqdm(file_list):
     try:
-        image_embeds = image_embeddings(image, clipmodel, clipprocessor)
-        prediction = aes_model(torch.from_numpy(image_embeds).float().to(device))
+        with torch.inference_mode():
+            image_embeds = image_embeddings(image, clipmodel, clipprocessor)
+            prediction = aes_model(torch.from_numpy(image_embeds).float().to(device))
         write_caption(image[:-3]+"txt", prediction.item())
     except Exception as e:
         print(f"ERROR: {image} MESSAGE: {e}")

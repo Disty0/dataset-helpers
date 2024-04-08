@@ -28,7 +28,7 @@ def write_caption_to_file(file_name, text):
     caption_file.close()
     
 def move_image(image, score):
-    if score < 0.80:
+    if score < 0.90:
         os.makedirs(os.path.dirname(f"bad/{image[2:]}"), exist_ok=True)
         shutil.move(image, f"bad/{image[2:]}")
         try:

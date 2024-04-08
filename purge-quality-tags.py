@@ -30,6 +30,7 @@ def write_caption_to_file(file_name):
     caption_file = open(file_name, "w")
     caption_file.seek(0)
     line = remove_old_tag(line)
+    caption_file.write(line)
     caption_file.close()
     
 
