@@ -1,13 +1,11 @@
 #!/usr/bin/env python
 
 import os
-import gc
 import glob
 import random
 import shutil
 from tqdm import tqdm
 
-steps_after_gc = 0
 count = 0
 shard = 0
 count_shard = 0
@@ -39,7 +37,7 @@ for txt_file in tqdm(file_list):
         shutil.move(txt_file, f"../moved_dataset/{str(shard).zfill(4)}/{str(count).zfill(8)}.txt")
         count = count + 1
         count_shard = count_shard + 1
-        if count_shard >= 128000:
+        if count_shard >= 4000:
             shard = shard + 1
             os.makedirs(os.path.dirname(f"../moved_dataset/{str(shard).zfill(4)}/"), exist_ok=True)
             count_shard = 0
@@ -52,8 +50,4 @@ for txt_file in tqdm(file_list):
             shutil.move(f"{txt_file[:-3]}jpg", f"errors/{txt_file[2:-3]}jpg")
         except Exception:
             pass
-    steps_after_gc = steps_after_gc + 1
-    if steps_after_gc >= 10000:
-        gc.collect()
-        steps_after_gc = 0
 

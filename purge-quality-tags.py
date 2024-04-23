@@ -1,12 +1,9 @@
 #!/usr/bin/env python
 
-import os
 import gc
-import shutil
 import glob
 
 from tqdm import tqdm
-
 
 steps_after_gc = 0
 
@@ -37,17 +34,12 @@ def write_caption_to_file(file_name):
 print("Searching for TXT files...")
 file_list = glob.glob('./*.txt')
 
-os.makedirs(os.path.dirname("errors/errors.txt"), exist_ok=True)
-open("errors/errors.txt", 'a').close()
 
 for text in tqdm(file_list):
     try:
         write_caption_to_file(text)
     except Exception as e:
         print(f"ERROR: {text} MESSAGE: {e}")
-        write_caption_to_file("errors/errors.txt", f"\nERROR: {text} MESSAGE: {e}")
-        os.makedirs(os.path.dirname(f"errors/{text[2:]}"), exist_ok=True)
-        shutil.move(text, f"errors/{text[2:]}")
     steps_after_gc = steps_after_gc + 1
     if steps_after_gc >= 10000:
         gc.collect()

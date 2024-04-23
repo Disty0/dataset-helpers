@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 
-import os
 import gc
-import shutil
-import glob
 import torch
 try:
     import intel_extension_for_pytorch as ipex
@@ -20,7 +17,7 @@ device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") 
 steps_after_gc = 0
 
 processor = AutoProcessor.from_pretrained("llava-hf/llava-1.5-7b-hf")
-model = LlavaForConditionalGeneration.from_pretrained("llava-hf/llava-1.5-7b-hf")
+model = LlavaForConditionalGeneration.from_pretrained("llava-hf/llava-1.5-7b-hf", low_cpu_mem_usage=True, torch_dtype=torch.float16)
 prompt = "<image>\nuser: what does the text say?\nassistant:"
 
 if "xpu" in device:
@@ -51,6 +48,7 @@ for image_file in tqdm(file_list):
         image = Image.open(image_file)
         inputs = processor(prompt, image, return_tensors="pt").to(device)
         generate_ids = model.generate(**inputs, max_length=64)
+        image.close()
         
         out_text = processor.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
         out_text = out_text.removeprefix("\nuser: what does the text say?\nassistant:").removeprefix(" ").replace("The text says,","The text says")
@@ -58,7 +56,7 @@ for image_file in tqdm(file_list):
         
         write_caption_to_file(image_file[:-3]+"txt", out_text)
     except Exception as e:
-        print(f"ERROR: {image} MESSAGE: {e}")
+        print(f"ERROR: {image_file} MESSAGE: {e}")
     steps_after_gc = steps_after_gc + 1
     if steps_after_gc >= 10000:
         getattr(torch, torch.device(device).type).synchronize()

@@ -6,7 +6,10 @@ import glob
 
 from tqdm import tqdm
 
-from tag_list import tag_list
+tag_list = [
+    [", questionable, ", ", nsfw, "],
+    [", explicit, ", ", explicit nsfw, "],
+]
 
 steps_after_gc = 0
 
