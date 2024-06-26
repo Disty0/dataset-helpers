@@ -13,14 +13,15 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm
 
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
-dtype = torch.bfloat16
+dtype = torch.float16
 steps_after_gc = 0
 batch_size = 16
 
 model_id = "vikhyatk/moondream2"
 revision = "2024-05-20"
 model = AutoModelForCausalLM.from_pretrained(
-    model_id, trust_remote_code=True, revision=revision, torch_dtype=dtype
+    model_id, trust_remote_code=True, revision=revision,
+    torch_dtype=dtype, attn_implementation="flash_attention_2"
 ).to(device)
 tokenizer = AutoTokenizer.from_pretrained(model_id, revision=revision)
 
