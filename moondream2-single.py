@@ -15,7 +15,7 @@ from tqdm import tqdm
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
 dtype = torch.bfloat16
 steps_after_gc = 0
-batch_size = 7
+batch_size = 16
 
 model_id = "vikhyatk/moondream2"
 revision = "2024-05-20"
