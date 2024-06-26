@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 
-import os
 import gc
-import shutil
 import glob
 import torch
 try:
@@ -15,8 +13,9 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm
 
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
-dtype = torch.bfloat16 if device == "xpu" else torch.float16
+dtype = torch.bfloat16
 steps_after_gc = 0
+batch_size = 7
 
 model_id = "vikhyatk/moondream2"
 revision = "2024-05-20"
@@ -38,44 +37,52 @@ def write_caption_to_file(file_name, text, line):
     caption_file.write(text)
 
 print("Searching for JPG files...")
-file_list = glob.glob('./**/.jpg')
+file_list = glob.glob('./**/*.jpg')
 
-os.makedirs(os.path.dirname("errors/errors.txt"), exist_ok=True)
-open("errors/errors.txt", 'a').close()
+file_list_batched = []
+file_list_temp = []
+image_count = len(file_list)
+for i in range(image_count):
+    file_list_temp.append(file_list[i])
+    if len(file_list_temp) >= batch_size or i == image_count-1:
+        file_list_batched.append(file_list_temp.copy())
+        file_list_temp = []
 
-for image in tqdm(file_list):
+for image in tqdm(file_list_batched):
     try:
-        caption_file = open(image[:-3]+"txt", "r")
-        line = caption_file.readlines()[0].replace("\n", "")
-        caption_file.close()
+        lines = []
+        prompts = []
+        open_images = []
+        for i in range(len(image)):
+            caption_file = open(image[i][:-3]+"txt", "r")
+            line = caption_file.readlines()[0].replace("\n", "")
+            lines.append(line)
+            caption_file.close()
 
-        prompt = f"Describe the image in detail. You can use these tags for guidance: {line}\nDon't mention anime, cartoon or illustration and pretend that anime and cartoon is the reality."
-        open_image = Image.open(image)
-        enc_image = model.encode_image(open_image)
-        prediction = model.answer_question(enc_image, prompt, tokenizer).lower()
-        open_image.close()
+            prompts.append(f"Describe the image in detail. You can use these tags for guidance: {line}\nDon't mention anime, cartoon or illustration and pretend that anime and cartoon is the reality.")
+            open_images.append(Image.open(image[i]).convert("RGB"))
 
-        prediction = prediction.replace("from anime", "").replace("anime-style", "").replace("an anime style", "a").replace("anime style", "").replace("an anime image", "an image").replace("an anime", "a").replace("anime", "")
-        prediction = prediction.replace("an animated character", "a character").replace("animated", "").replace("manga girl", "girl").replace("manga male", "male"). replace("manga character","character")
-        prediction = prediction.replace("cartoon-style", "").replace("cartoon style", "").replace("a cartoon illustration", "an illustration").replace("a cartoon", "a").replace("cartoon", "")
-        prediction = prediction.replace(" an  girl ", " a girl ").replace("\n", " ").replace("  ", " ")
-        while prediction[0] == " ":
-            prediction = prediction[1:]
-        while prediction[-1] == " ":
-            prediction = prediction[:-1]
-        while prediction[-1] == ".":
-            prediction = prediction[:-1]
-        if prediction[:9] == "an  girl ":
-            prediction = "a girl " + prediction[9:]
-        write_caption_to_file(image[:-3]+"txt", prediction, line)
+        prediction = model.batch_answer(images=open_images, prompts=prompts, tokenizer=tokenizer, max_new_tokens=154, repetition_penalty=1.2, do_sample=True)
+
+        for i in range(len(image)):
+            print(prediction[i])
+            prediction[i] = prediction[i].replace("from anime", "").replace("anime-style", "").replace("an anime style", "a").replace("anime style", "").replace("an anime image", "an image").replace("an anime", "a").replace("anime", "")
+            prediction[i] = prediction[i].replace("an animated character", "a character").replace("animated", "").replace("manga girl", "girl").replace("manga male", "male"). replace("manga character","character")
+            prediction[i] = prediction[i].replace("cartoon-style", "").replace("cartoon style", "").replace("a cartoon illustration", "an illustration").replace("a cartoon", "a").replace("cartoon", "")
+            prediction[i] = prediction[i].replace(" an  girl ", " a girl ").replace("\n", " ").replace("  ", " ")
+            while prediction[i][0] == " ":
+                prediction[i] = prediction[i][1:]
+            while prediction[i][-1] == " ":
+                prediction[i] = prediction[i][:-1]
+            while prediction[i][-1] == ".":
+                prediction[i] = prediction[i][:-1]
+            if prediction[i][:9] == "an  girl ":
+                prediction[i] = "a girl " + prediction[i][9:]
+
+        for i in range(len(image)):
+            write_caption_to_file(image[i][:-3]+"txt", prediction[i], lines[i])
     except Exception as e:
         print(f"ERROR: {image} MESSAGE: {e}")
-        os.makedirs(os.path.dirname(f"errors/{image[2:]}"), exist_ok=True)
-        shutil.move(image, f"errors/{image[2:]}")
-        try:
-            shutil.move(f"{image[:-3]}txt", f"errors/{image[2:-3]}txt")
-        except Exception:
-            pass
     steps_after_gc = steps_after_gc + 1
     if steps_after_gc >= 10000:
         getattr(torch, torch.device(device).type).synchronize()
