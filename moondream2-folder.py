@@ -68,7 +68,7 @@ for image in tqdm(file_list_batched):
             prediction[i] = prediction[i].replace("from anime", "").replace("anime-style", "").replace("an anime style", "a").replace("anime style", "").replace("an anime image", "an image").replace("an anime", "a").replace("anime", "")
             prediction[i] = prediction[i].replace("an animated character", "a character").replace("animated", "").replace("manga girl", "girl").replace("manga male", "male"). replace("manga character","character")
             prediction[i] = prediction[i].replace("cartoon-style", "").replace("cartoon style", "").replace("a cartoon illustration", "an illustration").replace("a cartoon", "a").replace("cartoon", "")
-            prediction[i] = prediction[i].replace(" an  girl ", " a girl ").replace("\n", " ").replace("  ", " ")
+            prediction[i] = prediction[i].replace(" an character", " a character").replace(" an  girl ", " a girl ").replace("\n", " ").replace("  ", " ")
             while prediction[i][0] == " ":
                 prediction[i] = prediction[i][1:]
             while prediction[i][-1] == " ":
