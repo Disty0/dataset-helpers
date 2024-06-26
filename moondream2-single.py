@@ -65,7 +65,6 @@ for image in tqdm(file_list_batched):
         prediction = model.batch_answer(images=open_images, prompts=prompts, tokenizer=tokenizer, max_new_tokens=154, repetition_penalty=1.2, do_sample=True)
 
         for i in range(len(image)):
-            print(prediction[i])
             prediction[i] = prediction[i].replace("from anime", "").replace("anime-style", "").replace("an anime style", "a").replace("anime style", "").replace("an anime image", "an image").replace("an anime", "a").replace("anime", "")
             prediction[i] = prediction[i].replace("an animated character", "a character").replace("animated", "").replace("manga girl", "girl").replace("manga male", "male"). replace("manga character","character")
             prediction[i] = prediction[i].replace("cartoon-style", "").replace("cartoon style", "").replace("a cartoon illustration", "an illustration").replace("a cartoon", "a").replace("cartoon", "")
