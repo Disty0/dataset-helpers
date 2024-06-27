@@ -56,16 +56,14 @@ for image in tqdm(file_list_batched):
         prompts = []
         open_images = []
         for i in current_batch_size:
-            try:
-                caption_file = open(image[i][:-3]+"txt", "r")
-                line = caption_file.readlines()[0].replace("\n", "")
-                lines.append(line)
-                caption_file.close()
+            caption_file = open(image[i][:-3]+"txt", "r")
+            line = caption_file.readlines()[0].replace("\n", "")
+            lines.append(line)
+            caption_file.close()
 
-                prompts.append(f"Describe the image in detail. You can use these tags for guidance: {line}\nDon't mention anime, cartoon or illustration and pretend that anime and cartoon is the reality.")
-                open_images.append(Image.open(image[i]).convert("RGB"))
-            except Exception as e:
-                print(f"ERROR: {image[i]} MESSAGE: {e}")
+            prompts.append(f"Describe the image in detail. You can use these tags for guidance: {line}\nDon't mention anime, cartoon or illustration and pretend that anime and cartoon is the reality.")
+            open_images.append(Image.open(image[i]).convert("RGB"))
+
 
         prediction = model.batch_answer(images=open_images, prompts=prompts, tokenizer=tokenizer, max_new_tokens=154, repetition_penalty=1.2, do_sample=True)
 
@@ -73,7 +71,7 @@ for image in tqdm(file_list_batched):
             try:
                 open_images[i].close()
             except Exception as e:
-                print(f"ERROR: {image[i]} MESSAGE: {e}")
+                print(f"ERROR Close: {image[i]} MESSAGE: {e}")
         for i in current_batch_size:
             try:
                 prediction[i] = prediction[i].lower().replace("from anime", "").replace("anime-style", "").replace("an anime style", "a").replace("anime style", "").replace("an anime image", "an image").replace("an anime", "a").replace("anime", "")
@@ -89,11 +87,14 @@ for image in tqdm(file_list_batched):
                 if prediction[i][:9] == "an  girl ":
                     prediction[i] = "a girl " + prediction[i][9:]
             except Exception as e:
-                print(f"ERROR: {image[i]} MESSAGE: {e}")
+                print(f"ERROR Post Process: {image[i]} MESSAGE: {e}")
         for i in current_batch_size:
-            write_caption_to_file(image[i][:-3]+"txt", prediction[i], lines[i])
+            try:
+                write_caption_to_file(image[i][:-3]+"txt", prediction[i], lines[i])
+            except Exception as e:
+                print(f"ERROR Write: {image[i]} MESSAGE: {e}")
     except Exception as e:
-        print(f"ERROR: {image} MESSAGE: {e}")
+        print(f"ERROR General: {image} MESSAGE: {e}")
     steps_after_gc = steps_after_gc + 1
     if steps_after_gc >= 10000:
         getattr(torch, torch.device(device).type).synchronize()
