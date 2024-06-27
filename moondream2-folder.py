@@ -51,35 +51,46 @@ for i in range(image_count):
 
 for image in tqdm(file_list_batched):
     try:
+        current_batch_size = range(len(image))
         lines = []
         prompts = []
         open_images = []
-        for i in range(len(image)):
-            caption_file = open(image[i][:-3]+"txt", "r")
-            line = caption_file.readlines()[0].replace("\n", "")
-            lines.append(line)
-            caption_file.close()
+        for i in current_batch_size:
+            try:
+                caption_file = open(image[i][:-3]+"txt", "r")
+                line = caption_file.readlines()[0].replace("\n", "")
+                lines.append(line)
+                caption_file.close()
 
-            prompts.append(f"Describe the image in detail. You can use these tags for guidance: {line}\nDon't mention anime, cartoon or illustration and pretend that anime and cartoon is the reality.")
-            open_images.append(Image.open(image[i]).convert("RGB"))
+                prompts.append(f"Describe the image in detail. You can use these tags for guidance: {line}\nDon't mention anime, cartoon or illustration and pretend that anime and cartoon is the reality.")
+                open_images.append(Image.open(image[i]).convert("RGB"))
+            except Exception as e:
+                print(f"ERROR: {image[i]} MESSAGE: {e}")
 
         prediction = model.batch_answer(images=open_images, prompts=prompts, tokenizer=tokenizer, max_new_tokens=154, repetition_penalty=1.2, do_sample=True)
 
-        for i in range(len(image)):
-            prediction[i] = prediction[i].lower().replace("from anime", "").replace("anime-style", "").replace("an anime style", "a").replace("anime style", "").replace("an anime image", "an image").replace("an anime", "a").replace("anime", "")
-            prediction[i] = prediction[i].replace("an animated character", "a character").replace("animated", "").replace("manga girl", "girl").replace("manga male", "male"). replace("manga character","character")
-            prediction[i] = prediction[i].replace("cartoon-style", "").replace("cartoon style", "").replace("a cartoon illustration", "an illustration").replace("a cartoon", "a").replace("cartoon", "")
-            prediction[i] = prediction[i].replace(" an character", " a character").replace(" an  girl ", " a girl ").replace("\n", " ").replace("  ", " ")
-            while prediction[i][0] == " ":
-                prediction[i] = prediction[i][1:]
-            while prediction[i][-1] == " ":
-                prediction[i] = prediction[i][:-1]
-            while prediction[i][-1] == ".":
-                prediction[i] = prediction[i][:-1]
-            if prediction[i][:9] == "an  girl ":
-                prediction[i] = "a girl " + prediction[i][9:]
-
-        for i in range(len(image)):
+        for i in current_batch_size:
+            try:
+                open_images[i].close()
+            except Exception as e:
+                print(f"ERROR: {image[i]} MESSAGE: {e}")
+        for i in current_batch_size:
+            try:
+                prediction[i] = prediction[i].lower().replace("from anime", "").replace("anime-style", "").replace("an anime style", "a").replace("anime style", "").replace("an anime image", "an image").replace("an anime", "a").replace("anime", "")
+                prediction[i] = prediction[i].replace("an animated character", "a character").replace("animated", "").replace("manga girl", "girl").replace("manga male", "male"). replace("manga character","character")
+                prediction[i] = prediction[i].replace("cartoon-style", "").replace("cartoon style", "").replace("a cartoon illustration", "an illustration").replace("a cartoon", "a").replace("cartoon", "")
+                prediction[i] = prediction[i].replace(" an character", " a character").replace(" an  girl ", " a girl ").replace("\n", " ").replace("  ", " ")
+                while prediction[i][0] == " ":
+                    prediction[i] = prediction[i][1:]
+                while prediction[i][-1] == " ":
+                    prediction[i] = prediction[i][:-1]
+                while prediction[i][-1] == ".":
+                    prediction[i] = prediction[i][:-1]
+                if prediction[i][:9] == "an  girl ":
+                    prediction[i] = "a girl " + prediction[i][9:]
+            except Exception as e:
+                print(f"ERROR: {image[i]} MESSAGE: {e}")
+        for i in current_batch_size:
             write_caption_to_file(image[i][:-3]+"txt", prediction[i], lines[i])
     except Exception as e:
         print(f"ERROR: {image} MESSAGE: {e}")
