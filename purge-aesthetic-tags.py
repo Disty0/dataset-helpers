@@ -7,6 +7,7 @@ from tqdm import tqdm
 
 steps_after_gc = 0
 
+
 def remove_old_tag(text):
     text = text.removeprefix("out of the scale aesthetic, ")
     text = text.removeprefix("masterpiece, ")
@@ -24,6 +25,7 @@ def remove_old_tag(text):
     text = text.removeprefix("very displeasing, ")
     return text
 
+
 def write_caption_to_file(file_name):
     caption_file = open(file_name, "r")
     line = caption_file.readlines()[0]
@@ -34,6 +36,7 @@ def write_caption_to_file(file_name):
     caption_file.write(line)
     caption_file.close()
     
+
 print("Searching for TXT files...")
 file_list = glob.glob('./*.txt')
 

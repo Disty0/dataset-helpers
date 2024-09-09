@@ -7,6 +7,7 @@ from tqdm import tqdm
 
 steps_after_gc = 0
 
+
 def remove_old_tag(text):
     text = text.removeprefix("out of the scale quality, ")
     text = text.removeprefix("masterpiece, ")
@@ -19,6 +20,7 @@ def remove_old_tag(text):
     text = text.removeprefix("low quality, ")
     text = text.removeprefix("worst quality, ")
     return text
+
 
 def write_caption_to_file(file_name):
     caption_file = open(file_name, "r")

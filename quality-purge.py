@@ -75,14 +75,20 @@ def move_image(image, score):
 
 clipprocessor = CLIPProcessor.from_pretrained(clip_name)
 clipmodel = CLIPModel.from_pretrained(clip_name).to(device).eval()
+clipmodel.requires_grad_(False)
 if "xpu" in device:
     clipmodel = ipex.optimize(clipmodel, dtype=torch.float32, inplace=True, weights_prepack=False)
+else:
+    clipmodel = torch.compile(clipmodel, mode="max-autotune", backend="inductor")
 
 aes_model = Classifier(512, 256, 1).to("cpu")
 aes_model.load_state_dict(torch.load(aesthetic_path, map_location="cpu"))
 aes_model = aes_model.eval().to(device)
+aes_model.requires_grad_(False)
 if "xpu" in device:
     aes_model = ipex.optimize(aes_model, dtype=torch.float32, inplace=True, weights_prepack=False)
+else:
+    aes_model = torch.compile(aes_model, mode="max-autotune", backend="inductor")
 
 print("Searching for JPG files...")
 file_list = glob.glob('./*.jpg')

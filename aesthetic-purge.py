@@ -15,6 +15,9 @@ from tqdm import tqdm
 
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
 pipe = pipeline("image-classification", model="shadowlilac/aesthetic-shadow-v2", device=device)
+pipe.model.eval()
+pipe.model.requires_grad_(False)
+
 steps_after_gc = 0
 
 

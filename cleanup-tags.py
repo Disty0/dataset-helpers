@@ -34,6 +34,14 @@ def write_tag(file_name):
     caption_file_2 = open(file_name, "w")
     for old_tag, new_tag in tag_list:
         tags = tags.replace(old_tag, new_tag)
+    while tags[0] == " ":
+        tags = tags[1:]
+    while tags[-1] == " ":
+        tags = tags[:-1]
+    while tags[-1] == ".":
+        tags = tags[:-1]
+    if tags[:9] == "an  girl ":
+        tags = "a girl " + tags[9:]
     caption_file_2.write(tags)
     caption_file_2.close()
 

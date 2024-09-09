@@ -3,6 +3,7 @@
 import os
 import gc
 import glob
+import json
 import time
 import torch
 try:
@@ -24,50 +25,6 @@ if "xpu" in device:
     pipe.model = ipex.optimize(pipe.model, inplace=True, weights_prepack=False)
 
 steps_after_gc = 0
-
-
-def remove_old_tag(text):
-    text = text.removeprefix("out of the scale aesthetic, ")
-    text = text.removeprefix("masterpiece, ")
-    text = text.removeprefix("extremely aesthetic, ")
-    text = text.removeprefix("very aesthetic, ")
-    text = text.removeprefix("asthetic, ")
-    text = text.removeprefix("aesthetic, ")
-    text = text.removeprefix("slightly asthetic, ")
-    text = text.removeprefix("slightly aesthetic, ")
-    text = text.removeprefix("not displeasing, ")
-    text = text.removeprefix("not asthetic, ")
-    text = text.removeprefix("not aesthetic, ")
-    text = text.removeprefix("slightly displeasing, ")
-    text = text.removeprefix("displeasing, ")
-    text = text.removeprefix("very displeasing, ")
-    return text
-
-
-
-def get_aesthetic_tag(score):
-    if score > 1.50: # out of the scale
-        return "out of the scale aesthetic"
-    if score > 1.10: # out of the scale
-        return "masterpiece"
-    elif score > 0.90:
-        return "extremely aesthetic"
-    elif score > 0.80:
-        return "very aesthetic"
-    elif score > 0.70:
-        return "aesthetic"
-    elif score > 0.50:
-        return "slightly aesthetic"
-    elif score > 0.40:
-        return "not displeasing"
-    elif score > 0.30:
-        return "not aesthetic"
-    elif score > 0.20:
-        return "slightly displeasing"
-    elif score > 0.10:
-        return "displeasing"
-    else:
-        return "very displeasing"
 
 
 class ImageBackend():
@@ -135,21 +92,26 @@ class SaveAestheticBackend():
 
 
     def save_to_file(self, data, path):
-        caption_file = open(path, "r")
-        line = caption_file.readlines()[0]
-        line = remove_old_tag(line)
-        caption_file.close()
-        caption_file = open(path, "w")
-        caption_file.seek(0)
-        caption_file.write(data + ", ")
-        caption_file.write(line)
-        caption_file.close()
+        with open(path, "r") as f:
+            json_data = json.load(f)
+        json_data["aesthetic-shadow-v2"] = data
+        with open(path, "w") as f:
+            json.dump(json_data, f)
 
 
-print("Searching for WEBP files...")
-file_list = glob.glob('./**/*.webp')
-epoch_len = len(file_list)
-image_backend = ImageBackend(file_list)
+print("Searching for JSON files...")
+file_list = glob.glob('./**/*.json')
+
+image_paths = []
+
+for json_path in tqdm(file_list):
+    with open(json_path, "r") as f:
+        json_data = json.load(f)
+    if json_data.get("aesthetic-shadow-v2", None) is None:
+        image_paths.append(os.path.splitext(json_path)[0]+".webp")
+
+epoch_len = len(image_paths)
+image_backend = ImageBackend(image_paths)
 save_backend = SaveAestheticBackend()
 
 with torch.no_grad():
@@ -157,17 +119,15 @@ with torch.no_grad():
         try:
             image, image_path = image_backend.get_images()[0]
             model_out = pipe(images=[image])[0]
-            image.close()
             if model_out[0]["label"] == "hq":
                 prediction = model_out[0]["score"]
             elif model_out[1]["label"] == "hq":
                 prediction = model_out[1]["score"]
-            aesthetic_tag = get_aesthetic_tag(prediction)
-            save_backend.save(aesthetic_tag, os.path.splitext(image_path)[0]+".txt")
+            save_backend.save(prediction, os.path.splitext(image_path)[0]+".json")
         except Exception as e:
             os.makedirs("errors", exist_ok=True)
-            error_file = open("errors/errors.txt", 'a')
-            error_file.write(f"ERROR: {image_path} MESSAGE: {e} \n")
+            error_file = open("errors/errors_aesthetic.txt", 'a')
+            error_file.write(f"ERROR: {json_path} MESSAGE: {e} \n")
             error_file.close()
         steps_after_gc = steps_after_gc + 1
         if steps_after_gc >= 10000:

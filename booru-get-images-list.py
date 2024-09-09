@@ -14,8 +14,8 @@ pybooru.resources.SITE_LIST["shima"] = {"url": "https://shima.donmai.us/"}
 client = pybooru.Danbooru('shima')
 
 parser = argparse.ArgumentParser(description='Get images from danbooru')
-parser.add_argument('start', type=int)
-parser.add_argument('end', type=int)
+parser.add_argument('list', type=str)
+
 args = parser.parse_args()
 
 general_blacklist = [
@@ -66,7 +66,16 @@ meta_blacklist = [
 ]
 
 
-for id in tqdm(range(args.start, args.end)):
+with open(args.list, "r") as file:
+    id_list = file.readlines()
+
+new_id_list = []
+for id in id_list:
+    if id:
+        new_id_list.append(int(id))
+id_list = new_id_list
+
+for id in tqdm(id_list):
     try:
         folder = str(int(id / 10000))
         os.makedirs(folder, exist_ok=True)
@@ -76,8 +85,7 @@ for id in tqdm(range(args.start, args.end)):
         image_size = width * height
         general_tags = image_data["tag_string_general"].split(" ")
         if (image_data["file_ext"] not in {"avi", "gif", "html", "mp3", "mp4", "mpg", "pdf", "rar", "swf", "webm", "wmv", "zip"}
-        and image_size > 768000
-        and not any([bool(tag in general_tags) for tag in general_blacklist])
+        and image_size > 768000 and not any([bool(tag in general_tags) for tag in general_blacklist])
         and not any([bool(tag in image_data["tag_string_meta"]) for tag in meta_blacklist])):
             image = Image.open(requests.get(image_data["file_url"], stream=True).raw).convert('RGBA')
             if image_size > 4194304: # 2048x2048
@@ -93,7 +101,7 @@ for id in tqdm(range(args.start, args.end)):
             time.sleep(0.25)
     except Exception as e:
         os.makedirs("errors", exist_ok=True)
-        error_file = open(f"errors/errors{args.start}.txt", 'a')
+        error_file = open(f"errors/errors_list.txt", 'a')
         error_file.write(f"ERROR: {id} MESSAGE: {e} \n")
         error_file.close()
 
