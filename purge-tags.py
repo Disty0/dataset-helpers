@@ -2,7 +2,6 @@
 
 import os
 import gc
-import shutil
 import glob
 
 from tqdm import tqdm

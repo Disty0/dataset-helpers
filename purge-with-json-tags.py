@@ -1,10 +1,8 @@
 #!/usr/bin/env python
 
 import os
-import gc
 import glob
 import json
-
 from tqdm import tqdm
 
 
@@ -72,6 +70,6 @@ for json_path in tqdm(file_list):
     except Exception as e:
         print(f"ERROR: {json_path} MESSAGE: {e}")
         os.makedirs("errors", exist_ok=True)
-        error_file = open(f"errors/errors_purge.txt", 'a')
+        error_file = open("errors/errors_purge.txt", 'a')
         error_file.write(f"ERROR: {json_path} MESSAGE: {e}")
         error_file.close()

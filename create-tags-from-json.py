@@ -170,13 +170,13 @@ def get_tags_from_json(json_path):
         if meta_tag and not any([bool(meta_tag_blacklist in meta_tag) for meta_tag_blacklist in meta_blacklist]):
             line += f", {meta_tag.replace('_', ' ')}"
     if json_data["rating"] == "g":
-        line += f", sfw"
+        line += ", sfw"
     elif json_data["rating"] == "s":
-        line += f", maybe sfw"
+        line += ", maybe sfw"
     elif json_data["rating"] == "q":
-        line += f", nsfw"
+        line += ", nsfw"
     elif json_data["rating"] == "e":
-        line += f", explicit nsfw"
+        line += ", explicit nsfw"
     return line
 
 
@@ -221,7 +221,7 @@ for json_path in tqdm(file_list):
         save_backend.save(tags, os.path.splitext(json_path)[0]+".txt")
     except Exception as e:
         os.makedirs("errors", exist_ok=True)
-        error_file = open(f"errors/errors.txt", 'a')
+        error_file = open("errors/errors.txt", 'a')
         error_file.write(f"ERROR: {json_path} MESSAGE: {e} \n")
         error_file.close()
     steps_after_gc = steps_after_gc + 1

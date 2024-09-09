@@ -101,7 +101,7 @@ for id in tqdm(id_list):
             time.sleep(0.25)
     except Exception as e:
         os.makedirs("errors", exist_ok=True)
-        error_file = open(f"errors/errors_list.txt", 'a')
+        error_file = open("errors/errors_list.txt", 'a')
         error_file.write(f"ERROR: {id} MESSAGE: {e} \n")
         error_file.close()
 

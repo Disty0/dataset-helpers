@@ -6,7 +6,7 @@ import shutil
 import glob
 import torch
 try:
-    import intel_extension_for_pytorch as ipex
+    import intel_extension_for_pytorch as ipex # noqa: F401
 except Exception:
     pass
 
