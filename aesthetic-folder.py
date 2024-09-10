@@ -146,43 +146,44 @@ class SaveAestheticBackend():
         caption_file.close()
 
 
-print("Searching for WEBP files...")
-file_list = glob.glob('./**/*.webp')
-epoch_len = len(file_list)
-image_backend = ImageBackend(file_list)
-save_backend = SaveAestheticBackend()
+if __name__ == '__main__':
+    print("Searching for WEBP files...")
+    file_list = glob.glob('./**/*.webp')
+    epoch_len = len(file_list)
+    image_backend = ImageBackend(file_list)
+    save_backend = SaveAestheticBackend()
 
-with torch.no_grad():
-    for _ in tqdm(range(epoch_len)):
-        try:
-            image, image_path = image_backend.get_images()[0]
-            model_out = pipe(images=[image])[0]
-            image.close()
-            if model_out[0]["label"] == "hq":
-                prediction = model_out[0]["score"]
-            elif model_out[1]["label"] == "hq":
-                prediction = model_out[1]["score"]
-            aesthetic_tag = get_aesthetic_tag(prediction)
-            save_backend.save(aesthetic_tag, os.path.splitext(image_path)[0]+".txt")
-        except Exception as e:
-            os.makedirs("errors", exist_ok=True)
-            error_file = open("errors/errors.txt", 'a')
-            error_file.write(f"ERROR: {image_path} MESSAGE: {e} \n")
-            error_file.close()
-        steps_after_gc = steps_after_gc + 1
-        if steps_after_gc >= 10000:
-            getattr(torch, torch.device(device).type).synchronize()
-            getattr(torch, torch.device(device).type).empty_cache()
-            gc.collect()
-            steps_after_gc = 0
+    with torch.no_grad():
+        for _ in tqdm(range(epoch_len)):
+            try:
+                image, image_path = image_backend.get_images()[0]
+                model_out = pipe(images=[image])[0]
+                image.close()
+                if model_out[0]["label"] == "hq":
+                    prediction = model_out[0]["score"]
+                elif model_out[1]["label"] == "hq":
+                    prediction = model_out[1]["score"]
+                aesthetic_tag = get_aesthetic_tag(prediction)
+                save_backend.save(aesthetic_tag, os.path.splitext(image_path)[0]+".txt")
+            except Exception as e:
+                os.makedirs("errors", exist_ok=True)
+                error_file = open("errors/errors.txt", 'a')
+                error_file.write(f"ERROR: {image_path} MESSAGE: {e} \n")
+                error_file.close()
+            steps_after_gc = steps_after_gc + 1
+            if steps_after_gc >= 10000:
+                getattr(torch, torch.device(device).type).synchronize()
+                getattr(torch, torch.device(device).type).empty_cache()
+                gc.collect()
+                steps_after_gc = 0
 
-image_backend.keep_loading = False
-image_backend.load_thread.shutdown(wait=True)
-del image_backend
+    image_backend.keep_loading = False
+    image_backend.load_thread.shutdown(wait=True)
+    del image_backend
 
-while not save_backend.save_queue.empty():
-    print(f"Waiting for the remaining writes: {save_backend.save_queue.qsize()}")
-    time.sleep(1)
-save_backend.keep_saving = False
-save_backend.save_thread.shutdown(wait=True)
-del save_backend
+    while not save_backend.save_queue.empty():
+        print(f"Waiting for the remaining writes: {save_backend.save_queue.qsize()}")
+        time.sleep(1)
+    save_backend.keep_saving = False
+    save_backend.save_thread.shutdown(wait=True)
+    del save_backend

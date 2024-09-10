@@ -180,58 +180,59 @@ def get_tags_from_json(json_path):
     return line
 
 
-print("Searching for JSON files...")
-file_list = glob.glob('./**/*.json')
+if __name__ == '__main__':
+    print("Searching for JSON files...")
+    file_list = glob.glob('./**/*.json')
 
-class SaveTagBackend():
-    def __init__(self, max_save_workers=8):
-        self.keep_saving = True
-        self.save_queue = Queue()
-        self.save_thread = ThreadPoolExecutor(max_workers=max_save_workers)
-        for _ in range(max_save_workers):
-            self.save_thread.submit(self.save_thread_func)
-
-
-    def save(self, data, path):
-        self.save_queue.put([data,path])
+    class SaveTagBackend():
+        def __init__(self, max_save_workers=8):
+            self.keep_saving = True
+            self.save_queue = Queue()
+            self.save_thread = ThreadPoolExecutor(max_workers=max_save_workers)
+            for _ in range(max_save_workers):
+                self.save_thread.submit(self.save_thread_func)
 
 
-    def save_thread_func(self):
-        while self.keep_saving:
-            if not self.save_queue.empty():
-                data = self.save_queue.get()
-                self.save_to_file(data[0], data[1])
-            else:
-                time.sleep(0.1)
-        print("Stopping the save backend threads")
-        return
+        def save(self, data, path):
+            self.save_queue.put([data,path])
 
 
-    def save_to_file(self, data, path):
-        caption_file = open(path, "w")
-        caption_file.write(data)
-        caption_file.close()
+        def save_thread_func(self):
+            while self.keep_saving:
+                if not self.save_queue.empty():
+                    data = self.save_queue.get()
+                    self.save_to_file(data[0], data[1])
+                else:
+                    time.sleep(0.1)
+            print("Stopping the save backend threads")
+            return
 
 
-save_backend = SaveTagBackend(max_save_workers=4)
+        def save_to_file(self, data, path):
+            caption_file = open(path, "w")
+            caption_file.write(data)
+            caption_file.close()
 
-for json_path in tqdm(file_list):
-    try:
-        tags = get_tags_from_json(json_path)
-        save_backend.save(tags, os.path.splitext(json_path)[0]+".txt")
-    except Exception as e:
-        os.makedirs("errors", exist_ok=True)
-        error_file = open("errors/errors.txt", 'a')
-        error_file.write(f"ERROR: {json_path} MESSAGE: {e} \n")
-        error_file.close()
-    steps_after_gc = steps_after_gc + 1
-    if steps_after_gc >= 100000:
-        gc.collect()
-        steps_after_gc = 0
 
-while not save_backend.save_queue.empty():
-    print(f"Waiting for the remaining writes: {save_backend.save_queue.qsize()}")
-    time.sleep(1)
-save_backend.keep_saving = False
-save_backend.save_thread.shutdown(wait=True)
-del save_backend
+    save_backend = SaveTagBackend(max_save_workers=4)
+
+    for json_path in tqdm(file_list):
+        try:
+            tags = get_tags_from_json(json_path)
+            save_backend.save(tags, os.path.splitext(json_path)[0]+".txt")
+        except Exception as e:
+            os.makedirs("errors", exist_ok=True)
+            error_file = open("errors/errors.txt", 'a')
+            error_file.write(f"ERROR: {json_path} MESSAGE: {e} \n")
+            error_file.close()
+        steps_after_gc = steps_after_gc + 1
+        if steps_after_gc >= 100000:
+            gc.collect()
+            steps_after_gc = 0
+
+    while not save_backend.save_queue.empty():
+        print(f"Waiting for the remaining writes: {save_backend.save_queue.qsize()}")
+        time.sleep(1)
+    save_backend.keep_saving = False
+    save_backend.save_thread.shutdown(wait=True)
+    del save_backend

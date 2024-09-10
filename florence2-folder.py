@@ -212,40 +212,41 @@ class SaveCaptionBackend():
         caption_file.close()
 
 
-print(f"Searching for {image_ext} files...")
-file_list = glob.glob(f'./**/*{image_ext}')
+if __name__ == '__main__':
+    print(f"Searching for {image_ext} files...")
+    file_list = glob.glob(f'./**/*{image_ext}')
 
-image_dataset = ImageDataset(file_list)
-train_dataloader = DataLoader(dataset=image_dataset, batch_size=32, shuffle=False, num_workers=8, prefetch_factor=4)
-save_backend = SaveCaptionBackend()
+    image_dataset = ImageDataset(file_list)
+    train_dataloader = DataLoader(dataset=image_dataset, batch_size=32, shuffle=False, num_workers=8, prefetch_factor=4)
+    save_backend = SaveCaptionBackend()
 
-with torch.no_grad():
-    for image_paths, input_ids, pixel_values, widths, heights in tqdm(train_dataloader):
-        try:
-            generated_ids = model.generate(
-                input_ids=input_ids.to(device),
-                pixel_values=pixel_values.to(device, dtype=dtype),
-                max_new_tokens=512,
-                do_sample=False,
-                num_beams=3
-            )
-            generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)
-            save_backend.save(generated_text, image_paths, widths, heights)
-        except Exception as e:
-            os.makedirs("errors", exist_ok=True)
-            error_file = open("errors/errors.txt", 'a')
-            error_file.write(f"ERROR: {image_paths} MESSAGE: {e} \n")
-            error_file.close()
-        steps_after_gc = steps_after_gc + 1
-        if steps_after_gc >= 256:
-            getattr(torch, torch.device(device).type).synchronize()
-            getattr(torch, torch.device(device).type).empty_cache()
-            gc.collect()
-            steps_after_gc = 0
+    with torch.no_grad():
+        for image_paths, input_ids, pixel_values, widths, heights in tqdm(train_dataloader):
+            try:
+                generated_ids = model.generate(
+                    input_ids=input_ids.to(device),
+                    pixel_values=pixel_values.to(device, dtype=dtype),
+                    max_new_tokens=512,
+                    do_sample=False,
+                    num_beams=3
+                )
+                generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)
+                save_backend.save(generated_text, image_paths, widths, heights)
+            except Exception as e:
+                os.makedirs("errors", exist_ok=True)
+                error_file = open("errors/errors.txt", 'a')
+                error_file.write(f"ERROR: {image_paths} MESSAGE: {e} \n")
+                error_file.close()
+            steps_after_gc = steps_after_gc + 1
+            if steps_after_gc >= 256:
+                getattr(torch, torch.device(device).type).synchronize()
+                getattr(torch, torch.device(device).type).empty_cache()
+                gc.collect()
+                steps_after_gc = 0
 
-while not save_backend.save_queue.empty():
-    print(f"Waiting for the remaining writes: {save_backend.save_queue.qsize()}")
-    time.sleep(1)
-save_backend.keep_saving = False
-save_backend.save_thread.shutdown(wait=True)
-del save_backend
+    while not save_backend.save_queue.empty():
+        print(f"Waiting for the remaining writes: {save_backend.save_queue.qsize()}")
+        time.sleep(1)
+    save_backend.keep_saving = False
+    save_backend.save_thread.shutdown(wait=True)
+    del save_backend

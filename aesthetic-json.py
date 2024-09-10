@@ -98,51 +98,51 @@ class SaveAestheticBackend():
         with open(path, "w") as f:
             json.dump(json_data, f)
 
+if __name__ == '__main__':
+    print("Searching for JSON files...")
+    file_list = glob.glob('./**/*.json')
 
-print("Searching for JSON files...")
-file_list = glob.glob('./**/*.json')
+    image_paths = []
 
-image_paths = []
+    for json_path in tqdm(file_list):
+        with open(json_path, "r") as f:
+            json_data = json.load(f)
+        if json_data.get("aesthetic-shadow-v2", None) is None:
+            image_paths.append(os.path.splitext(json_path)[0]+".webp")
 
-for json_path in tqdm(file_list):
-    with open(json_path, "r") as f:
-        json_data = json.load(f)
-    if json_data.get("aesthetic-shadow-v2", None) is None:
-        image_paths.append(os.path.splitext(json_path)[0]+".webp")
+    epoch_len = len(image_paths)
+    image_backend = ImageBackend(image_paths)
+    save_backend = SaveAestheticBackend()
 
-epoch_len = len(image_paths)
-image_backend = ImageBackend(image_paths)
-save_backend = SaveAestheticBackend()
+    with torch.no_grad():
+        for _ in tqdm(range(epoch_len)):
+            try:
+                image, image_path = image_backend.get_images()[0]
+                model_out = pipe(images=[image])[0]
+                if model_out[0]["label"] == "hq":
+                    prediction = model_out[0]["score"]
+                elif model_out[1]["label"] == "hq":
+                    prediction = model_out[1]["score"]
+                save_backend.save(prediction, os.path.splitext(image_path)[0]+".json")
+            except Exception as e:
+                os.makedirs("errors", exist_ok=True)
+                error_file = open("errors/errors_aesthetic.txt", 'a')
+                error_file.write(f"ERROR: {json_path} MESSAGE: {e} \n")
+                error_file.close()
+            steps_after_gc = steps_after_gc + 1
+            if steps_after_gc >= 10000:
+                getattr(torch, torch.device(device).type).synchronize()
+                getattr(torch, torch.device(device).type).empty_cache()
+                gc.collect()
+                steps_after_gc = 0
 
-with torch.no_grad():
-    for _ in tqdm(range(epoch_len)):
-        try:
-            image, image_path = image_backend.get_images()[0]
-            model_out = pipe(images=[image])[0]
-            if model_out[0]["label"] == "hq":
-                prediction = model_out[0]["score"]
-            elif model_out[1]["label"] == "hq":
-                prediction = model_out[1]["score"]
-            save_backend.save(prediction, os.path.splitext(image_path)[0]+".json")
-        except Exception as e:
-            os.makedirs("errors", exist_ok=True)
-            error_file = open("errors/errors_aesthetic.txt", 'a')
-            error_file.write(f"ERROR: {json_path} MESSAGE: {e} \n")
-            error_file.close()
-        steps_after_gc = steps_after_gc + 1
-        if steps_after_gc >= 10000:
-            getattr(torch, torch.device(device).type).synchronize()
-            getattr(torch, torch.device(device).type).empty_cache()
-            gc.collect()
-            steps_after_gc = 0
+    image_backend.keep_loading = False
+    image_backend.load_thread.shutdown(wait=True)
+    del image_backend
 
-image_backend.keep_loading = False
-image_backend.load_thread.shutdown(wait=True)
-del image_backend
-
-while not save_backend.save_queue.empty():
-    print(f"Waiting for the remaining writes: {save_backend.save_queue.qsize()}")
-    time.sleep(1)
-save_backend.keep_saving = False
-save_backend.save_thread.shutdown(wait=True)
-del save_backend
+    while not save_backend.save_queue.empty():
+        print(f"Waiting for the remaining writes: {save_backend.save_queue.qsize()}")
+        time.sleep(1)
+    save_backend.keep_saving = False
+    save_backend.save_thread.shutdown(wait=True)
+    del save_backend
