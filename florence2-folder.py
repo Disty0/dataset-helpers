@@ -187,15 +187,17 @@ class SaveCaptionBackend():
             self.save_thread.submit(self.save_thread_func)
 
 
-    def save(self, data, path):
-        self.save_queue.put([data,path])
+    def save(self, generated_text, image_paths, widths, heights):
+        self.save_queue.put([generated_text, image_paths, widths, heights])
 
 
     def save_thread_func(self):
         while self.keep_saving:
             if not self.save_queue.empty():
-                data = self.save_queue.get()
-                self.save_to_file(data[0], data[1])
+                generated_text, image_paths, widths, heights = self.save_queue.get()
+                for i in range(len(image_paths)):
+                    prediction = processor.post_process_generation(generated_text[i], task=prompt, image_size=(int(widths[i]), int(heights[i])))[prompt]
+                    self.save_to_file(prediction, os.path.splitext(image_paths[i])[0]+".txt")
             else:
                 time.sleep(0.1)
         print("Stopping the save backend threads")
@@ -226,9 +228,7 @@ with torch.no_grad():
                 num_beams=3
             )
             generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)
-            for i in range(len(image_paths)):
-                prediction = processor.post_process_generation(generated_text[i], task=prompt, image_size=(int(widths[i]), int(heights[i])))[prompt]
-                save_backend.save(prediction, os.path.splitext(image_paths[i])[0]+".txt")
+            save_backend.save(generated_text, image_paths, widths, heights)
         except Exception as e:
             os.makedirs("errors", exist_ok=True)
             error_file = open("errors/errors.txt", 'a')

@@ -172,7 +172,7 @@ def get_tags_from_json(json_path):
     if json_data["rating"] == "g":
         line += ", sfw"
     elif json_data["rating"] == "s":
-        line += ", maybe sfw"
+        line += ", suggestive"
     elif json_data["rating"] == "q":
         line += ", nsfw"
     elif json_data["rating"] == "e":
