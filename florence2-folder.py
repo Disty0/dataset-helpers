@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 
 image_ext = ".webp"
-prompt = "<DETAILED_CAPTION>"
+prompt = "Describe this anime image in detail. Pretend that anime and cartoon is the reality."
 model_id = "MiaoshouAI/Florence-2-base-PromptGen-v1.5"
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
 dtype = torch.float16 if "xpu" not in device else torch.bfloat16
