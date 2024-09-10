@@ -16,14 +16,16 @@ from torch.utils.data import Dataset, DataLoader
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 
+image_ext = ".webp"
 prompt = "<DETAILED_CAPTION>"
 model_id = "MiaoshouAI/Florence-2-base-PromptGen-v1.5"
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
 dtype = torch.float16 if "xpu" not in device else torch.bfloat16
+use_flash_atten = "xpu" not in device
 steps_after_gc = 0
 
 
-if "xpu" in device:
+if not use_flash_atten:
     import transformers
     from transformers.dynamic_module_utils import get_imports
     def fixed_get_imports(filename: str | os.PathLike) -> list[str]:
@@ -36,7 +38,7 @@ if "xpu" in device:
 
 model = AutoModelForCausalLM.from_pretrained(
     model_id, trust_remote_code=True, torch_dtype=dtype,
-    attn_implementation="flash_attention_2" if "xpu" not in device else None,
+    attn_implementation="flash_attention_2" if use_flash_atten else None,
 ).to(device, dtype=dtype).eval()
 model.requires_grad_(False)
 processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
@@ -210,11 +212,11 @@ class SaveCaptionBackend():
         caption_file.close()
 
 
-print("Searching for WEBP files...")
-file_list = glob.glob('./**/*.webp')
+print(f"Searching for {image_ext} files...")
+file_list = glob.glob(f'./**/*{image_ext}')
 
 image_dataset = ImageDataset(file_list)
-train_dataloader = DataLoader(dataset=image_dataset, batch_size=32, shuffle=False, num_workers=4, prefetch_factor=4)
+train_dataloader = DataLoader(dataset=image_dataset, batch_size=32, shuffle=False, num_workers=8, prefetch_factor=4)
 save_backend = SaveCaptionBackend()
 
 with torch.no_grad():
@@ -235,7 +237,7 @@ with torch.no_grad():
             error_file.write(f"ERROR: {image_paths} MESSAGE: {e} \n")
             error_file.close()
         steps_after_gc = steps_after_gc + 1
-        if steps_after_gc >= 10000:
+        if steps_after_gc >= 256:
             getattr(torch, torch.device(device).type).synchronize()
             getattr(torch, torch.device(device).type).empty_cache()
             gc.collect()
