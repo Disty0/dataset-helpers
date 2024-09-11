@@ -25,25 +25,6 @@ use_flash_atten = "xpu" not in device
 steps_after_gc = 0
 
 
-if torch.version.hip:
-    try:
-        # don't use this for training models, only for inference with latent encoder and embed encoder
-        # https://github.com/huggingface/diffusers/discussions/7172
-        from functools import wraps
-        from flash_attn import flash_attn_func
-        backup_sdpa = torch.nn.functional.scaled_dot_product_attention
-        @wraps(torch.nn.functional.scaled_dot_product_attention)
-        def sdpa_hijack(query, key, value, attn_mask=None, dropout_p=0.0, is_causal=False, scale=None):
-            if query.shape[3] <= 128 and attn_mask is None and query.dtype != torch.float32:
-                return flash_attn_func(q=query.transpose(1, 2), k=key.transpose(1, 2), v=value.transpose(1, 2), dropout_p=dropout_p, causal=is_causal, softmax_scale=scale).transpose(1, 2)
-            else:
-                return backup_sdpa(query=query, key=key, value=value, attn_mask=attn_mask, dropout_p=dropout_p, is_causal=is_causal, scale=scale)
-        torch.nn.functional.scaled_dot_product_attention = sdpa_hijack
-        use_flash_atten = False
-    except Exception as e:
-        print(f"Failed to enable Flash Atten for ROCm: {e}")
-
-
 if not use_flash_atten:
     import transformers
     from transformers.dynamic_module_utils import get_imports
@@ -286,13 +267,15 @@ class ImageBackend():
                     image_paths.append(image_path)
                     prompts.append(prompt)
                 inputs = self.processor(text=prompts, images=images, return_tensors="pt", padding="longest", max_length=769, truncation=True) # 769 = 577 image + 192 text. max_length > 769 is too slow.
+                attention_mask_image = torch.ones((batch_size, 577), device=inputs["attention_mask"].device, dtype=inputs["attention_mask"].dtype)
+                inputs["attention_mask"] = torch.cat([attention_mask_image, inputs["attention_mask"]], dim=1) # add atten mask for the image
                 self.load_queue.put([inputs, image_paths])
         print("Stopping the image loader threads")
         return
 
 
     def load_from_file(self, image_path):
-        base_prompt = "Describe this anime image in detail. Describe the overall art style and the quality of this anime image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, vaginal and intimacy as well. Pretend that anime and cartoon is the reality. If you are not sure about something, then don't mention it."
+        base_prompt = "Describe this anime image in detail. Describe the overall art style and the quality of this anime image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals and intimacy as well. Pretend that anime and cartoon is the reality. If you are not sure about something, then don't mention it."
         json_path = os.path.splitext(image_path)[0]+".json"
         if os.path.exists(json_path):
             prompt = f"{base_prompt} These are the tags for the anime image, you can use them for guidence: {get_tags_from_json(json_path)}"
@@ -376,6 +359,7 @@ if __name__ == '__main__':
                 generated_ids = model.generate(
                     input_ids=inputs["input_ids"].to(device),
                     pixel_values=inputs["pixel_values"].to(device, dtype=dtype),
+                    attention_mask=inputs["attention_mask"].to(device),
                     max_new_tokens=512,
                     do_sample=False,
                     num_beams=3
