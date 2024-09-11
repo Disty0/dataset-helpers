@@ -5,9 +5,14 @@ import gc
 import glob
 import json
 import time
+import atexit
 import torch
 try:
+    import transformers # ipex hijacks transformers and makes it unable to load a model
+    backup_get_class_from_dynamic_module = transformers.dynamic_module_utils.get_class_from_dynamic_module
     import intel_extension_for_pytorch as ipex
+    ipex.llm.utils._get_class_from_dynamic_module = backup_get_class_from_dynamic_module
+    transformers.dynamic_module_utils.get_class_from_dynamic_module = backup_get_class_from_dynamic_module
 except Exception:
     pass
 from PIL import Image
@@ -16,13 +21,13 @@ from transformers import AutoModelForCausalLM, AutoProcessor
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 
-batch_size = 32
+batch_size = 8
 image_ext = ".webp"
 model_id = "MiaoshouAI/Florence-2-base-PromptGen-v1.5"
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
-dtype = torch.float16 if "xpu" not in device else torch.bfloat16
-use_flash_atten = "xpu" not in device
-steps_after_gc = 0
+dtype = torch.float16 if "cuda" in device else torch.bfloat16 if "xpu" in device else torch.float32
+use_flash_atten = "cuda" in device
+steps_after_gc = -1
 
 
 if not use_flash_atten:
@@ -316,7 +321,6 @@ class SaveCaptionBackend():
 
     def save_to_file(self, data, path):
         caption_file = open(path, "w")
-        #caption_file.write(cleanup_caption(data))
         caption_file.write(data)
         caption_file.close()
 
@@ -328,12 +332,16 @@ if __name__ == '__main__':
         attn_implementation="flash_attention_2" if use_flash_atten else None,
     ).to(device, dtype=dtype).eval()
     model.requires_grad_(False)
+    model.vision_tower.eval()
+    model.vision_tower.requires_grad_(False)
+    model.language_model.eval()
+    model.language_model.requires_grad_(False)
 
     if "xpu" in device:
-        model = ipex.optimize(model, dtype=dtype, inplace=True, weights_prepack=False)
-    #else:
-    #    torch.cuda.tunable.enable(val=True)
-    #    model = torch.compile(model, mode="max-autotune", backend="inductor")
+        model = ipex.llm.optimize(model, device=device, dtype=dtype, inplace=True)
+    else:
+        torch.cuda.tunable.enable(val=True)
+        model = torch.compile(model, mode="max-autotune", backend="inductor")
 
 
     print(f"Searching for {image_ext} files...")
@@ -351,6 +359,19 @@ if __name__ == '__main__':
     epoch_len = len(batches)
     image_backend = ImageBackend(batches, processor)
     save_backend = SaveCaptionBackend(processor)
+
+    def exit_handler(image_backend, save_backend):
+        image_backend.keep_loading = False
+        image_backend.load_thread.shutdown(wait=True)
+        del image_backend
+
+        while not save_backend.save_queue.empty():
+            print(f"Waiting for the remaining writes: {save_backend.save_queue.qsize()}")
+            time.sleep(1)
+        save_backend.keep_saving = False
+        save_backend.save_thread.shutdown(wait=True)
+        del save_backend
+    atexit.register(exit_handler, image_backend, save_backend)
 
     with torch.no_grad():
         for _ in tqdm(range(epoch_len)):
@@ -371,19 +392,11 @@ if __name__ == '__main__':
                 error_file.write(f"ERROR: {image_paths} MESSAGE: {e} \n")
                 error_file.close()
             steps_after_gc = steps_after_gc + 1
-            if steps_after_gc >= 256:
+            if steps_after_gc == 0 or steps_after_gc >= 10000:
                 getattr(torch, torch.device(device).type).synchronize()
                 getattr(torch, torch.device(device).type).empty_cache()
                 gc.collect()
-                steps_after_gc = 0
+                steps_after_gc = 1 if steps_after_gc == 0 else 0
 
-    image_backend.keep_loading = False
-    image_backend.load_thread.shutdown(wait=True)
-    del image_backend
-
-    while not save_backend.save_queue.empty():
-        print(f"Waiting for the remaining writes: {save_backend.save_queue.qsize()}")
-        time.sleep(1)
-    save_backend.keep_saving = False
-    save_backend.save_thread.shutdown(wait=True)
-    del save_backend
+    atexit.unregister(exit_handler)
+    exit_handler(image_backend, save_backend)
