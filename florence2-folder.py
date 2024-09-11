@@ -3,6 +3,7 @@
 import os
 import gc
 import glob
+import json
 import time
 import torch
 try:
@@ -12,17 +13,35 @@ except Exception:
 from PIL import Image
 from queue import Queue
 from transformers import AutoModelForCausalLM, AutoProcessor
-from torch.utils.data import Dataset, DataLoader
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 
+batch_size = 32
 image_ext = ".webp"
-prompt = "Describe this anime image in detail. Describe the overall art style of this anime image as well. Describe nudity and sex as well. Pretend that anime and cartoon is the reality. If you are not sure about something, then don't mention it."
 model_id = "MiaoshouAI/Florence-2-base-PromptGen-v1.5"
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
 dtype = torch.float16 if "xpu" not in device else torch.bfloat16
 use_flash_atten = "xpu" not in device
 steps_after_gc = 0
+
+
+if torch.version.hip:
+    try:
+        # don't use this for training models, only for inference with latent encoder and embed encoder
+        # https://github.com/huggingface/diffusers/discussions/7172
+        from functools import wraps
+        from flash_attn import flash_attn_func
+        backup_sdpa = torch.nn.functional.scaled_dot_product_attention
+        @wraps(torch.nn.functional.scaled_dot_product_attention)
+        def sdpa_hijack(query, key, value, attn_mask=None, dropout_p=0.0, is_causal=False, scale=None):
+            if query.shape[3] <= 128 and attn_mask is None and query.dtype != torch.float32:
+                return flash_attn_func(q=query.transpose(1, 2), k=key.transpose(1, 2), v=value.transpose(1, 2), dropout_p=dropout_p, causal=is_causal, softmax_scale=scale).transpose(1, 2)
+            else:
+                return backup_sdpa(query=query, key=key, value=value, attn_mask=attn_mask, dropout_p=dropout_p, is_causal=is_causal, scale=scale)
+        torch.nn.functional.scaled_dot_product_attention = sdpa_hijack
+        use_flash_atten = False
+    except Exception as e:
+        print(f"Failed to enable Flash Atten for ROCm: {e}")
 
 
 if not use_flash_atten:
@@ -36,153 +55,258 @@ if not use_flash_atten:
         return imports
     transformers.dynamic_module_utils.get_imports = fixed_get_imports
 
-model = AutoModelForCausalLM.from_pretrained(
-    model_id, trust_remote_code=True, torch_dtype=dtype,
-    attn_implementation="flash_attention_2" if use_flash_atten else None,
-).to(device, dtype=dtype).eval()
-model.requires_grad_(False)
-processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
 
-if "xpu" in device:
-    model = ipex.optimize(model, dtype=dtype, inplace=True, weights_prepack=False)
-#else:
-#    torch.cuda.tunable.enable(val=True)
-#    model = torch.compile(model, mode="max-autotune", backend="inductor")
-
-
-letter_list = [
-    'b', 'c', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n',
-    'p', 'q', 'r', 's', 't', 'v', 'w', 'x', 'y', 'z'
+meta_blacklist = [
+    "source",
+    "upload",
+    "annotated",
+    "translation",
+    "translated",
+    "completion_time",
+    "_request",
+    "_id",
+    "_link",
+    "_available",
+    "_account",
+    "_mismatch",
+    "_sample",
+    "check_",
+    "has_",
+    "metadata",
+    "thumbnail",
+    "duplicate",
+    "revision",
+    "variant_set",
+    "commentary",
+    "audio",
+    "video",
+    "photoshop_(medium)",
 ]
 
-caption_list = [
-    ["  ", " "],
-    [" -inspired", " stylization inspired"],
-    [" -focused", " art style focused"],
-    [" -oriented", " art style oriented"],
-    [" -themed", " stylized"],
-    [" -style", " stylized"],
-    [" -like", " stylized"],
-    [" -related", " context related"],
-    [" ish", " stylized"],
-    [" ish", " stylized"],
-    [" a or ", " a "],
-    [" a d ", " a "],
-    [" d ", " "],
-    [" in a, ", ", "],
-    [" a illustration", " an illustration"],
-    [" and illustration", " illustration"],
-    [" stylized stylization inspired" , " stylized"],
-    [" vulnerability and vulnerability" , " vulnerability"],
-]
-
-filler_caption_list = [
-    ["the image description suggests ", ""],
-    ["the image appears to depict ", ""],
-    ["the image seems to capture ", ""],
-    ["the image appears to show ", ""],
-    ["the illustration depicts ", "an illustration of "],
-    ["the image appears to be ", ""],
-    ["the provided describes ", ""],
-    ["the image demonstrates ", ""],
-    ["the image portrayal is ", ""],
-    ["the image comprises of ", ""],
-    ["the image illustrates ", "an illustration of "],
-    ["the image consists of ", ""],
-    ["the image seems to be ", ""],
-    ["the image represents ", ""],
-    ["the image showcases ", ""],
-    ["the image comprises ", ""],
-    ["the image captures ", ""],
-    ["the image contains ", ""],
-    ["the image displays ", ""],
-    ["the image exhibits ", ""],
-    ["the image features ", ""],
-    ["the image portrays ", ""],
-    ["the image provides ", ""],
-    ["the image presents ", ""],
-    ["the image includes ", ""],
-    ["the image conveys ", ""],
-    ["the image depicts ", ""],
-    ["the image depict ", ""],
-    ["the image poses ", ""],
-    ["the image shows ", ""],
-    ["the image show ", ""],
-    ["in this image, ", ""],
-    ["in this image ", ""],
-    ["in the image, ", ""],
-    ["in the image ", ""],
-    ["the image of ", ""],
-    ["the image is ", ""],
-    ["this is ", ""],
-    ["a d ", "a "],
-    ["as the image is described as ", ""],
-]
-
-
-def cleanup_whitespace(caption):
-    while caption[0] == ",":
-        caption = caption[1:]
-    while caption[0] == ".":
-        caption = caption[1:]
-    while caption[0] == " ":
-        caption = caption[1:]
-    while caption[-1] == " ":
-        caption = caption[:-1]
-    while caption[-1] == ".":
-        caption = caption[:-1]
-    while caption[-1] == ",":
-        caption = caption[:-1]
-    return caption
-
-
-def cleanup_caption(caption):
-    global caption_list, filler_caption_list
-    caption = caption.lower().replace("from anime", "").replace("anime-style", "").replace("an anime style", "a").replace("anime style", "").replace("an anime image", "an image").replace("an anime", "a").replace("anime", "")
-    caption = caption.replace("an animated character", "a character").replace("animated", "").replace("manga girl", "girl").replace("manga male", "male"). replace("manga character","character")
-    caption = caption.replace("cartoon-style", "").replace("cartoon style", "").replace("a cartoon illustration", "an illustration").replace("a cartoon", "a").replace("cartoon", "")
-    caption = caption.replace(" an character", " a character").replace(" an  girl ", " a girl ").replace("\n", " ").replace("  ", " ")
-    caption = cleanup_whitespace(caption)
-    if caption[:9] == "an  girl ":
-        caption = "a girl " + caption[9:]
-    caption = cleanup_whitespace(caption)
-    for old_tag, new_tag in caption_list:
-        caption = caption.replace(old_tag, new_tag)
-    caption = cleanup_whitespace(caption)
-    for tag, new_tag in filler_caption_list:
-        tag_len = len(tag)
-        if caption[:tag_len] == tag:
-            caption = new_tag + caption[tag_len:]
-    caption = cleanup_whitespace(caption)
-    for letter in letter_list:
-        caption = caption.replace(f" an {letter}", f" a {letter}")
-    caption = cleanup_whitespace(caption)
-    for letter in letter_list:
-        if caption[:4] == f"an {letter}":
-            caption = "a" + caption[2:]
-            break
-    caption = cleanup_whitespace(caption)
-    return caption
+# From KohakuBlueleaf/HakuBooru
+fav_count_percentile_full = {
+    "g": {
+        5: 1,
+        10: 1,
+        15: 2,
+        20: 3,
+        25: 3,
+        30: 4,
+        35: 5,
+        40: 6,
+        45: 7,
+        50: 8,
+        55: 9,
+        60: 10,
+        65: 12,
+        70: 14,
+        75: 16,
+        80: 18,
+        85: 22,
+        90: 27,
+        95: 37,
+    },
+    "s": {
+        5: 1,
+        10: 2,
+        15: 4,
+        20: 5,
+        25: 6,
+        30: 8,
+        35: 9,
+        40: 11,
+        45: 13,
+        50: 15,
+        55: 17,
+        60: 19,
+        65: 22,
+        70: 26,
+        75: 30,
+        80: 36,
+        85: 44,
+        90: 56,
+        95: 81,
+    },
+    "q": {
+        5: 4,
+        10: 8,
+        15: 11,
+        20: 14,
+        25: 18,
+        30: 21,
+        35: 25,
+        40: 29,
+        45: 33,
+        50: 38,
+        55: 43,
+        60: 49,
+        65: 56,
+        70: 65,
+        75: 75,
+        80: 88,
+        85: 105,
+        90: 132,
+        95: 182,
+    },
+    "e": {
+        5: 4,
+        10: 9,
+        15: 13,
+        20: 18,
+        25: 22,
+        30: 27,
+        35: 33,
+        40: 39,
+        45: 45,
+        50: 52,
+        55: 60,
+        60: 69,
+        65: 79,
+        70: 92,
+        75: 106,
+        80: 125,
+        85: 151,
+        90: 190,
+        95: 262,
+    },
+}
 
 
-class ImageDataset(Dataset):
-    def __init__(self, image_paths):
-        self.image_paths = image_paths
-    def __len__(self):
-        return len(self.image_paths)
-    def __getitem__(self, index):
-        image_path = self.image_paths[index]
+def get_quality_tag(score, rating):
+    percentile = fav_count_percentile_full[rating]
+    if score > percentile[95]:
+        quality_tag = "best quality"
+    elif score > percentile[90]:
+        quality_tag = "high quality"
+    elif score > percentile[75]:
+        quality_tag = "great quality"
+    elif score > percentile[50]:
+        quality_tag = "medium quality"
+    elif score > percentile[25]:
+        quality_tag = "normal quality"
+    elif score > percentile[10]:
+        quality_tag = "bad quality"
+    elif score > percentile[5]:
+        quality_tag = "low quality"
+    else:
+        quality_tag = "worst quality"
+    return quality_tag
+
+
+def get_aesthetic_tag(score):
+    if score > 1.50: # out of the scale
+        return "out of the scale aesthetic"
+    if score > 1.10: # out of the scale
+        return "masterpiece"
+    elif score > 0.90:
+        return "extremely aesthetic"
+    elif score > 0.80:
+        return "very aesthetic"
+    elif score > 0.70:
+        return "aesthetic"
+    elif score > 0.50:
+        return "slightly aesthetic"
+    elif score > 0.40:
+        return "not displeasing"
+    elif score > 0.30:
+        return "not aesthetic"
+    elif score > 0.20:
+        return "slightly displeasing"
+    elif score > 0.10:
+        return "displeasing"
+    else:
+        return "very displeasing"
+
+
+def get_tags_from_json(json_path):
+    with open(json_path, "r") as json_file:
+        json_data = json.load(json_file)
+    line = f"year {json_data['created_at'][:4]}"
+    for artist in json_data["tag_string_artist"].split(" "):
+        if artist:
+            line += f", art by {artist.replace('_', ' ')}"
+    for cpr in json_data["tag_string_copyright"].split(" "):
+        if cpr:
+            line += f", from {cpr.replace('_', ' ')}"
+    for char in json_data["tag_string_character"].split(" "):
+        if char:
+            line += f", character {char.replace('_', ' ')}"
+    for tag in json_data["tag_string_general"].split(" "):
+        if tag:
+            line += f", {tag.replace('_', ' ') if len(tag) > 3 else tag}"
+    for meta_tag in json_data["tag_string_meta"].split(" "):
+        if meta_tag and not any([bool(meta_tag_blacklist in meta_tag) for meta_tag_blacklist in meta_blacklist]):
+            line += f", {meta_tag.replace('_', ' ')}"
+    if json_data["rating"] == "g":
+        line += ", sfw"
+    elif json_data["rating"] == "s":
+        line += ", suggestive"
+    elif json_data["rating"] == "q":
+        line += ", nsfw"
+    elif json_data["rating"] == "e":
+        line += ", explicit nsfw"
+    line += ", " + get_quality_tag(json_data.get("fav_count", json_data["score"]), json_data["rating"])
+    if json_data.get("aesthetic-shadow-v2", None) is not None:
+        line += ", " + get_aesthetic_tag(json_data["aesthetic-shadow-v2"])
+    return line
+
+
+class ImageBackend():
+    def __init__(self, batches, processor, load_queue_lenght=32, max_load_workers=4):
+        self.keep_loading = True
+        self.batches = Queue()
+        self.processor = processor
+        for batch in batches:
+            if isinstance(batch, str):
+                batch = [batch]
+            self.batches.put(batch)
+        self.load_queue_lenght = load_queue_lenght
+        self.load_queue = Queue()
+        self.load_thread = ThreadPoolExecutor(max_workers=max_load_workers)
+        for _ in range(max_load_workers):
+            self.load_thread.submit(self.load_thread_func)
+
+
+    def get_images(self):
+        return self.load_queue.get()
+
+
+    def load_thread_func(self):
+        while self.keep_loading:
+            if self.load_queue.qsize() >= self.load_queue_lenght:
+                time.sleep(0.1)
+            elif not self.batches.empty():
+                batches = self.batches.get()
+                images = []
+                image_paths = []
+                prompts = []
+                for batch in batches:
+                    image, image_path, prompt = self.load_from_file(batch)
+                    images.append(image)
+                    image_paths.append(image_path)
+                    prompts.append(prompt)
+                inputs = self.processor(text=prompts, images=images, return_tensors="pt", padding="longest", max_length=769, truncation=True) # 769 = 577 image + 192 text. max_length > 769 is too slow.
+                self.load_queue.put([inputs, image_paths])
+        print("Stopping the image loader threads")
+        return
+
+
+    def load_from_file(self, image_path):
+        base_prompt = "Describe this anime image in detail. Describe the overall art style and the quality of this anime image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, vaginal and intimacy as well. Pretend that anime and cartoon is the reality. If you are not sure about something, then don't mention it."
+        json_path = os.path.splitext(image_path)[0]+".json"
+        if os.path.exists(json_path):
+            prompt = f"{base_prompt} These are the tags for the anime image, you can use them for guidence: {get_tags_from_json(json_path)}"
+        else:
+            prompt = base_prompt
         image = Image.open(image_path).convert("RGBA")
         background = Image.new('RGBA', image.size, (255, 255, 255))
         image = Image.alpha_composite(background, image).convert("RGB")
-        inputs = processor(text=prompt, images=image, return_tensors="pt")
-        width, height = image.size
-        image.close()
-        return image_path, inputs["input_ids"][0], inputs["pixel_values"][0], width, height
+        return [image, image_path, prompt]
 
 
 class SaveCaptionBackend():
-    def __init__(self, max_save_workers=2):
+    def __init__(self, processor, max_save_workers=2):
+        self.processor = processor
         self.keep_saving = True
         self.save_queue = Queue()
         self.save_thread = ThreadPoolExecutor(max_workers=max_save_workers)
@@ -190,17 +314,17 @@ class SaveCaptionBackend():
             self.save_thread.submit(self.save_thread_func)
 
 
-    def save(self, generated_text, image_paths, widths, heights):
-        self.save_queue.put([generated_text, image_paths, widths, heights])
+    def save(self, generated_ids, image_paths):
+        self.save_queue.put([generated_ids, image_paths])
 
 
     def save_thread_func(self):
         while self.keep_saving:
             if not self.save_queue.empty():
-                generated_text, image_paths, widths, heights = self.save_queue.get()
+                generated_ids, image_paths = self.save_queue.get()
+                generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True)
                 for i in range(len(image_paths)):
-                    prediction = processor.post_process_generation(generated_text[i], task=prompt, image_size=(int(widths[i]), int(heights[i])))[prompt]
-                    self.save_to_file(prediction, os.path.splitext(image_paths[i])[0]+".txt")
+                    self.save_to_file(generated_text[i].split("\n")[0].replace(" vulnerability and vulnerability" , " vulnerability"), os.path.splitext(image_paths[i])[0]+".txt")
             else:
                 time.sleep(0.1)
         print("Stopping the save backend threads")
@@ -215,25 +339,48 @@ class SaveCaptionBackend():
 
 
 if __name__ == '__main__':
+    processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id, trust_remote_code=True, torch_dtype=dtype,
+        attn_implementation="flash_attention_2" if use_flash_atten else None,
+    ).to(device, dtype=dtype).eval()
+    model.requires_grad_(False)
+
+    if "xpu" in device:
+        model = ipex.optimize(model, dtype=dtype, inplace=True, weights_prepack=False)
+    #else:
+    #    torch.cuda.tunable.enable(val=True)
+    #    model = torch.compile(model, mode="max-autotune", backend="inductor")
+
+
     print(f"Searching for {image_ext} files...")
     file_list = glob.glob(f'./**/*{image_ext}')
+    batches = []
+    current_batch = []
+    for file in file_list:
+        current_batch.append(file)
+        if len(current_batch) >= batch_size:
+            batches.append(current_batch)
+            current_batch = []
+    if len(current_batch) != 0:
+        batches.append(current_batch)
 
-    image_dataset = ImageDataset(file_list)
-    train_dataloader = DataLoader(dataset=image_dataset, batch_size=32, shuffle=False, num_workers=4, prefetch_factor=4)
-    save_backend = SaveCaptionBackend()
+    epoch_len = len(batches)
+    image_backend = ImageBackend(batches, processor)
+    save_backend = SaveCaptionBackend(processor)
 
     with torch.no_grad():
-        for image_paths, input_ids, pixel_values, widths, heights in tqdm(train_dataloader):
+        for _ in tqdm(range(epoch_len)):
             try:
+                inputs, image_paths = image_backend.get_images()
                 generated_ids = model.generate(
-                    input_ids=input_ids.to(device),
-                    pixel_values=pixel_values.to(device, dtype=dtype),
+                    input_ids=inputs["input_ids"].to(device),
+                    pixel_values=inputs["pixel_values"].to(device, dtype=dtype),
                     max_new_tokens=512,
                     do_sample=False,
                     num_beams=3
                 )
-                generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)
-                save_backend.save(generated_text, image_paths, widths, heights)
+                save_backend.save(generated_ids, image_paths)
             except Exception as e:
                 os.makedirs("errors", exist_ok=True)
                 error_file = open("errors/errors.txt", 'a')
@@ -245,6 +392,10 @@ if __name__ == '__main__':
                 getattr(torch, torch.device(device).type).empty_cache()
                 gc.collect()
                 steps_after_gc = 0
+
+    image_backend.keep_loading = False
+    image_backend.load_thread.shutdown(wait=True)
+    del image_backend
 
     while not save_backend.save_queue.empty():
         print(f"Waiting for the remaining writes: {save_backend.save_queue.qsize()}")

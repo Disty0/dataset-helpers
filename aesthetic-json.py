@@ -17,13 +17,6 @@ from transformers import pipeline
 from tqdm import tqdm
 
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
-pipe = pipeline("image-classification", model="shadowlilac/aesthetic-shadow-v2", device=device)
-pipe.model.eval()
-pipe.model.requires_grad_(False)
-
-if "xpu" in device:
-    pipe.model = ipex.optimize(pipe.model, inplace=True, weights_prepack=False)
-
 steps_after_gc = 0
 
 
@@ -52,10 +45,10 @@ class ImageBackend():
                 time.sleep(0.1)
             elif not self.batches.empty():
                 batches = self.batches.get()
-                curren_batch = []
+                current_batch = []
                 for batch in batches:
-                    curren_batch.append(self.load_from_file(batch))
-                self.load_queue.put(curren_batch)
+                    current_batch.append(self.load_from_file(batch))
+                self.load_queue.put(current_batch)
         print("Stopping the image loader threads")
         return
 
@@ -99,6 +92,13 @@ class SaveAestheticBackend():
             json.dump(json_data, f)
 
 if __name__ == '__main__':
+    pipe = pipeline("image-classification", model="shadowlilac/aesthetic-shadow-v2", device=device)
+    pipe.model.eval()
+    pipe.model.requires_grad_(False)
+
+    if "xpu" in device:
+        pipe.model = ipex.optimize(pipe.model, inplace=True, weights_prepack=False)
+
     print("Searching for JSON files...")
     file_list = glob.glob('./**/*.json')
 
