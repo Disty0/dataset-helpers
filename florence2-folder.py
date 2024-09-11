@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 
 image_ext = ".webp"
-prompt = "Describe this anime image in detail. Pretend that anime and cartoon is the reality."
+prompt = "Describe this anime image in detail. Describe the overall art style of this anime image as well. Describe nudity and sex as well. Pretend that anime and cartoon is the reality. If you are not sure about something, then don't mention it."
 model_id = "MiaoshouAI/Florence-2-base-PromptGen-v1.5"
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
 dtype = torch.float16 if "xpu" not in device else torch.bfloat16
@@ -73,6 +73,7 @@ caption_list = [
     [" a illustration", " an illustration"],
     [" and illustration", " illustration"],
     [" stylized stylization inspired" , " stylized"],
+    [" vulnerability and vulnerability" , " vulnerability"],
 ]
 
 filler_caption_list = [
@@ -208,7 +209,8 @@ class SaveCaptionBackend():
 
     def save_to_file(self, data, path):
         caption_file = open(path, "w")
-        caption_file.write(cleanup_caption(data))
+        #caption_file.write(cleanup_caption(data))
+        caption_file.write(data)
         caption_file.close()
 
 
@@ -217,7 +219,7 @@ if __name__ == '__main__':
     file_list = glob.glob(f'./**/*{image_ext}')
 
     image_dataset = ImageDataset(file_list)
-    train_dataloader = DataLoader(dataset=image_dataset, batch_size=32, shuffle=False, num_workers=8, prefetch_factor=4)
+    train_dataloader = DataLoader(dataset=image_dataset, batch_size=32, shuffle=False, num_workers=4, prefetch_factor=4)
     save_backend = SaveCaptionBackend()
 
     with torch.no_grad():
