@@ -208,15 +208,6 @@ def get_tags_from_json(json_path):
     with open(json_path, "r") as json_file:
         json_data = json.load(json_file)
     line = f"year {json_data['created_at'][:4]}"
-    for artist in json_data["tag_string_artist"].split(" "):
-        if artist:
-            line += f", art by {artist.replace('_', ' ')}"
-    for cpr in json_data["tag_string_copyright"].split(" "):
-        if cpr:
-            line += f", from {cpr.replace('_', ' ')}"
-    for char in json_data["tag_string_character"].split(" "):
-        if char:
-            line += f", character {char.replace('_', ' ')}"
     for tag in json_data["tag_string_general"].split(" "):
         if tag:
             line += f", {tag.replace('_', ' ') if len(tag) > 3 else tag}"
@@ -231,6 +222,15 @@ def get_tags_from_json(json_path):
         line += ", nsfw"
     elif json_data["rating"] == "e":
         line += ", explicit nsfw"
+    for char in json_data["tag_string_character"].split(" "):
+        if char:
+            line += f", character {char.replace('_', ' ')}"
+    for cpr in json_data["tag_string_copyright"].split(" "):
+        if cpr:
+            line += f", from {cpr.replace('_', ' ')}"
+    for artist in json_data["tag_string_artist"].split(" "):
+        if artist:
+            line += f", art by {artist.replace('_', ' ')}"
     line += ", " + get_quality_tag(json_data.get("fav_count", json_data["score"]), json_data["rating"])
     if json_data.get("aesthetic-shadow-v2", None) is not None:
         line += ", " + get_aesthetic_tag(json_data["aesthetic-shadow-v2"])
