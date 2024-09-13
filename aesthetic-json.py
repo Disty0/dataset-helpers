@@ -7,17 +7,17 @@ import json
 import time
 import atexit
 import torch
-try:
-    import intel_extension_for_pytorch as ipex
-except Exception:
-    pass
+#try:
+#    import intel_extension_for_pytorch as ipex # noqa: F401
+#except Exception:
+#    pass
 from PIL import Image
 from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
 from transformers import pipeline
 from tqdm import tqdm
 
-device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
+device = "cuda" if torch.cuda.is_available() else "cpu" # else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available()
 steps_after_gc = -1
 
 
@@ -97,8 +97,13 @@ if __name__ == '__main__':
     pipe.model.eval()
     pipe.model.requires_grad_(False)
 
-    if "xpu" in device:
-        pipe.model = ipex.llm.optimize(pipe.model, device=device, dtype=torch.float32, inplace=True)
+    if "cpu" in device:
+        os.environ.setdefault('PYTORCH_TRACING_MODE', 'TORCHFX')
+        torch._dynamo.eval_frame.check_if_dynamo_supported = lambda: True
+        import openvino.torch # noqa: F401
+        pipe.model = torch.compile(pipe.model, backend='openvino', options = {"device" : "GPU", "model_caching": True, "cache_dir": os.path.join(os.getenv('HOME'), ".cache/openvino/model_cache")})
+    #if "xpu" in device:
+    #    pipe.model = ipex.llm.optimize(pipe.model, device=device, dtype=torch.float32, inplace=True)
     #else:
     #    torch.cuda.tunable.enable(val=True)
     #    pipe.model = torch.compile(pipe.model, mode="max-autotune", backend="inductor")
@@ -148,8 +153,9 @@ if __name__ == '__main__':
                 error_file.close()
             steps_after_gc = steps_after_gc + 1
             if steps_after_gc == 0 or steps_after_gc >= 10000:
-                getattr(torch, torch.device(device).type).synchronize()
-                getattr(torch, torch.device(device).type).empty_cache()
+                if "cpu" not in device:
+                    getattr(torch, torch.device(device).type).synchronize()
+                    getattr(torch, torch.device(device).type).empty_cache()
                 gc.collect()
                 steps_after_gc = 1 if steps_after_gc == 0 else 0
 

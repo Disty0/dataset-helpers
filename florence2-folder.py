@@ -184,18 +184,18 @@ def get_aesthetic_tag(score):
         return "out of the scale aesthetic"
     if score > 1.10: # out of the scale
         return "masterpiece"
-    elif score > 0.90:
+    elif score > 0.92:
         return "extremely aesthetic"
-    elif score > 0.80:
+    elif score > 0.85:
         return "very aesthetic"
-    elif score > 0.70:
+    elif score > 0.75:
         return "aesthetic"
     elif score > 0.50:
         return "slightly aesthetic"
     elif score > 0.40:
-        return "not displeasing"
-    elif score > 0.30:
         return "not aesthetic"
+    elif score > 0.30:
+        return "not displeasing"
     elif score > 0.20:
         return "slightly displeasing"
     elif score > 0.10:
@@ -280,7 +280,7 @@ class ImageBackend():
 
 
     def load_from_file(self, image_path):
-        base_prompt = "Describe this anime image in detail. Describe the overall art style and the quality of this anime image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals and intimacy as well. Pretend that anime and cartoon is the reality. If you are not sure about something, then don't mention it."
+        base_prompt = "Describe this anime image. Describe the overall art style and the quality of this anime image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions, intimacy, vulnerability and sensuality as well. Pretend that anime and cartoon is the reality. If you are not sure about something, then don't mention it."
         json_path = os.path.splitext(image_path)[0]+".json"
         if os.path.exists(json_path):
             prompt = f"{base_prompt} These are the tags for the anime image, you can use them for guidence: {get_tags_from_json(json_path)}"
@@ -312,7 +312,7 @@ class SaveCaptionBackend():
                 generated_ids, image_paths = self.save_queue.get()
                 generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True)
                 for i in range(len(image_paths)):
-                    self.save_to_file(generated_text[i].split("\n")[0].replace(" vulnerability and vulnerability" , " vulnerability"), os.path.splitext(image_paths[i])[0]+".txt")
+                    self.save_to_file(generated_text[i], os.path.splitext(image_paths[i])[0]+".txt")
             else:
                 time.sleep(0.1)
         print("Stopping the save backend threads")
@@ -393,8 +393,9 @@ if __name__ == '__main__':
                 error_file.close()
             steps_after_gc = steps_after_gc + 1
             if steps_after_gc == 0 or steps_after_gc >= 10000:
-                getattr(torch, torch.device(device).type).synchronize()
-                getattr(torch, torch.device(device).type).empty_cache()
+                if "cpu" not in device:
+                    getattr(torch, torch.device(device).type).synchronize()
+                    getattr(torch, torch.device(device).type).empty_cache()
                 gc.collect()
                 steps_after_gc = 1 if steps_after_gc == 0 else 0
 
