@@ -65,7 +65,7 @@ def get_aesthetic_tag(score):
 
 
 class ImageBackend():
-    def __init__(self, batches, load_queue_lenght=32, max_load_workers=4):
+    def __init__(self, batches, load_queue_lenght=64, max_load_workers=4):
         self.keep_loading = True
         self.batches = Queue()
         for batch in batches:
