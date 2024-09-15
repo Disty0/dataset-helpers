@@ -3,6 +3,7 @@
 import os
 import gc
 import glob
+import json
 import time
 import atexit
 import torch
@@ -44,43 +45,6 @@ class Classifier(torch.nn.Module):
         x = self.fc3(x)
         x = self.sigmoid(x)
         return x
-
-
-def remove_old_tag(text):
-    text = text.removeprefix("out of the scale quality, ")
-    text = text.removeprefix("masterpiece, ")
-    text = text.removeprefix("best quality, ")
-    text = text.removeprefix("high quality, ")
-    text = text.removeprefix("great quality, ")
-    text = text.removeprefix("medium quality, ")
-    text = text.removeprefix("normal quality, ")
-    text = text.removeprefix("bad quality, ")
-    text = text.removeprefix("low quality, ")
-    text = text.removeprefix("worst quality, ")
-    return text
-
-   
-def get_quality_tag(score):
-    if score > 1.50: # way out of the scale
-        return "out of the scale quality"
-    elif score > 1.10: # out of the scale
-        return "masterpiece"
-    elif score > 0.98:
-        return "best quality"
-    elif score > 0.90:
-        return "high quality"
-    elif score > 0.75:
-        return "great quality"
-    elif score > 0.50:
-        return "medium quality"
-    elif score > 0.25:
-        return "normal quality"
-    elif score > 0.125:
-        return "bad quality"
-    elif score > 0.025:
-        return "low quality"
-    else:
-        return "worst quality"
 
 
 class ImageBackend():
@@ -145,7 +109,7 @@ class SaveQualityBackend():
             if not self.save_queue.empty():
                 predictions, image_paths = self.save_queue.get()
                 for i in range(len(image_paths)):
-                    self.save_to_file(predictions[i].item(), os.path.splitext(image_paths[i])[0]+".txt")
+                    self.save_to_file(predictions[i].item(), os.path.splitext(image_paths[i])[0]+".json")
             else:
                 time.sleep(0.1)
         print("Stopping the save backend threads")
@@ -153,15 +117,11 @@ class SaveQualityBackend():
 
 
     def save_to_file(self, data, path):
-        caption_file = open(path, "r")
-        line = caption_file.readlines()[0]
-        line = remove_old_tag(line)
-        caption_file.close()
-        caption_file = open(path, "w")
-        caption_file.seek(0)
-        caption_file.write(get_quality_tag(data) + ", ")
-        caption_file.write(line)
-        caption_file.close()
+        with open(path, "r") as f:
+            json_data = json.load(f)
+        json_data["wd-aes-b32-v0"] = data
+        with open(path, "w") as f:
+            json.dump(json_data, f)
 
 
 if __name__ == '__main__':
@@ -183,11 +143,19 @@ if __name__ == '__main__':
         aes_model = torch.compile(aes_model, mode="max-autotune", backend="inductor")
 
 
-    print(f"Searching for {image_ext} files...")
-    file_list = glob.glob(f'./**/*{image_ext}')
+    print("Searching for .json files...")
+    file_list = glob.glob('./**/*.json')
+    image_paths = []
+
+    for json_path in tqdm(file_list):
+        with open(json_path, "r") as f:
+            json_data = json.load(f)
+        if json_data.get("wd-aes-b32-v0", None) is None:
+            image_paths.append(os.path.splitext(json_path)[0]+image_ext)
+
     batches = []
     current_batch = []
-    for file in file_list:
+    for file in image_paths:
         current_batch.append(file)
         if len(current_batch) >= batch_size:
             batches.append(current_batch)

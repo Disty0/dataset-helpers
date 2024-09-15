@@ -246,8 +246,7 @@ class ImageBackend():
             if isinstance(batch, str):
                 batch = [batch]
             self.batches.put(batch)
-        self.load_queue_lenght = load_queue_lenght
-        self.load_queue = Queue()
+        self.load_queue = Queue(maxsize=load_queue_lenght)
         self.load_thread = ThreadPoolExecutor(max_workers=max_load_workers)
         for _ in range(max_load_workers):
             self.load_thread.submit(self.load_thread_func)
@@ -259,9 +258,7 @@ class ImageBackend():
 
     def load_thread_func(self):
         while self.keep_loading:
-            if self.load_queue.qsize() >= self.load_queue_lenght:
-                time.sleep(0.1)
-            elif not self.batches.empty():
+            if not self.batches.empty():
                 batches = self.batches.get()
                 images = []
                 image_paths = []
@@ -276,6 +273,8 @@ class ImageBackend():
                 inputs["attention_mask"] = torch.cat([attention_mask_image, inputs["attention_mask"]], dim=1) # add atten mask for the image
                 inputs["pixel_values"] = inputs["pixel_values"].to(dtype=dtype, memory_format=torch.channels_last)
                 self.load_queue.put([inputs, image_paths])
+            else:
+                time.sleep(1)
         print("Stopping the image loader threads")
         return
 
