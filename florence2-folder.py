@@ -272,7 +272,7 @@ class ImageBackend():
                     image_paths.append(image_path)
                     prompts.append(prompt)
                 inputs = self.processor(text=prompts, images=images, return_tensors="pt", padding="longest", max_length=769, truncation=True) # 769 = 577 image + 192 text. max_length > 769 is too slow.
-                attention_mask_image = torch.ones((batch_size, 577), device=inputs["attention_mask"].device, dtype=inputs["attention_mask"].dtype)
+                attention_mask_image = torch.ones((inputs["attention_mask"].shape[0], 577), device=inputs["attention_mask"].device, dtype=inputs["attention_mask"].dtype)
                 inputs["attention_mask"] = torch.cat([attention_mask_image, inputs["attention_mask"]], dim=1) # add atten mask for the image
                 inputs["pixel_values"] = inputs["pixel_values"].to(dtype=dtype, memory_format=torch.channels_last)
                 self.load_queue.put([inputs, image_paths])
