@@ -22,33 +22,40 @@ steps_after_gc = -1
 
 
 class ImageBackend():
-    def __init__(self, batches, load_queue_lenght=64, max_load_workers=4):
+    def __init__(self, batches, load_queue_lenght=128, max_load_workers=4):
+        self.load_queue_lenght = 0
         self.keep_loading = True
         self.batches = Queue()
         for batch in batches:
             if isinstance(batch, str):
                 batch = [batch]
             self.batches.put(batch)
-        self.load_queue = Queue(maxsize=load_queue_lenght)
-        self.load_thread = ThreadPoolExecutor(max_workers=max_load_workers)
+        self.max_load_queue_lenght = load_queue_lenght
+        self.load_queue = Queue()
+        self.load_thread = ThreadPoolExecutor()
         for _ in range(max_load_workers):
             self.load_thread.submit(self.load_thread_func)
 
 
     def get_images(self):
-        return self.load_queue.get()
+        result = self.load_queue.get()
+        self.load_queue_lenght -= 1
+        return result
 
 
     def load_thread_func(self):
         while self.keep_loading:
-            if not self.batches.empty():
+            if self.load_queue_lenght >= self.max_load_queue_lenght:
+                time.sleep(0.1)
+            elif not self.batches.empty():
                 batches = self.batches.get()
                 current_batch = []
                 for batch in batches:
                     current_batch.append(self.load_from_file(batch))
                 self.load_queue.put(current_batch)
+                self.load_queue_lenght += 1
             else:
-                time.sleep(1)
+                time.sleep(5)
         print("Stopping the image loader threads")
         return
 

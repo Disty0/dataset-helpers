@@ -11,7 +11,6 @@ try:
     import intel_extension_for_pytorch as ipex
 except Exception:
     pass
-
 from transformers import CLIPModel, CLIPProcessor
 from PIL import Image
 from queue import Queue
@@ -23,7 +22,7 @@ image_ext = ".webp"
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
 aesthetic_path = '/mnt/DataSSD/AI/models/aes-B32-v0.pth'
 clip_name = 'openai/clip-vit-base-patch32'
-dtype = torch.float32
+dtype = torch.float32 # outputs nonsense with 16 bit
 steps_after_gc = -1
 
 
@@ -48,7 +47,8 @@ class Classifier(torch.nn.Module):
 
 
 class ImageBackend():
-    def __init__(self, batches, processor, load_queue_lenght=128, max_load_workers=4):
+    def __init__(self, batches, processor, load_queue_lenght=256, max_load_workers=4):
+        self.load_queue_lenght = 0
         self.keep_loading = True
         self.batches = Queue()
         self.processor = processor
@@ -56,19 +56,24 @@ class ImageBackend():
             if isinstance(batch, str):
                 batch = [batch]
             self.batches.put(batch)
-        self.load_queue = Queue(maxsize=load_queue_lenght)
-        self.load_thread = ThreadPoolExecutor(max_workers=max_load_workers)
+        self.max_load_queue_lenght = load_queue_lenght
+        self.load_queue = Queue()
+        self.load_thread = ThreadPoolExecutor()
         for _ in range(max_load_workers):
             self.load_thread.submit(self.load_thread_func)
 
 
     def get_images(self):
-        return self.load_queue.get()
+        result = self.load_queue.get()
+        self.load_queue_lenght -= 1
+        return result
 
 
     def load_thread_func(self):
         while self.keep_loading:
-            if not self.batches.empty():
+            if self.load_queue_lenght >= self.max_load_queue_lenght:
+                time.sleep(0.1)
+            elif not self.batches.empty():
                 batches = self.batches.get()
                 images = []
                 image_paths = []
@@ -78,8 +83,9 @@ class ImageBackend():
                     image_paths.append(image_path)
                 inputs = clipprocessor(images=images, return_tensors='pt')['pixel_values'].to(dtype=dtype, memory_format=torch.channels_last)
                 self.load_queue.put([inputs, image_paths])
+                self.load_queue_lenght += 1
             else:
-                time.sleep(1)
+                time.sleep(5)
         print("Stopping the image loader threads")
         return
 
