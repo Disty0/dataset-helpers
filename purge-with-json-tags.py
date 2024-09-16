@@ -65,7 +65,11 @@ for json_path in tqdm(file_list):
         with open(json_path, "r") as json_file:
             json_data = json.load(json_file)
         general_tags = json_data["tag_string_general"].split(" ")
-        if json_data["is_banned"] or json_data["is_flagged"] or json_data["is_deleted"] or (any([bool(tag in general_tags) for tag in general_blacklist]) or any([bool(tag in json_data["tag_string_meta"]) for tag in meta_blacklist])):
+        if (json_data["is_banned"]
+        or json_data["is_flagged"]
+        or json_data["is_deleted"]
+        or any([bool(tag in general_tags) for tag in general_blacklist])
+        or any([bool(tag in json_data["tag_string_meta"]) for tag in meta_blacklist])):
             out_file.write(json_path[2:-5] + "\n")
     except Exception as e:
         print(f"ERROR: {json_path} MESSAGE: {e}")
