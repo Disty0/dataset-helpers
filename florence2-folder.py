@@ -347,7 +347,7 @@ if __name__ == '__main__':
     if "xpu" in device:
         model = ipex.llm.optimize(model, device=device, dtype=dtype, inplace=True)
     else:
-        torch.cuda.tunable.enable(val=True)
+        #torch.cuda.tunable.enable(val=True)
         model = torch.compile(model, mode="max-autotune", backend="inductor")
 
 

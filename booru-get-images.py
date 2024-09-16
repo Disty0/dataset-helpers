@@ -76,7 +76,7 @@ for id in tqdm(range(args.start, args.end)):
         image_size = width * height
         general_tags = image_data["tag_string_general"].split(" ")
         if (image_data["file_ext"] not in {"avi", "gif", "html", "mp3", "mp4", "mpg", "pdf", "rar", "swf", "webm", "wmv", "zip"}
-        and image_size > 768000
+        and image_size > 768000 and not (image_data["is_banned"] or image_data["is_flagged"] or image_data["is_deleted"])
         and not any([bool(tag in general_tags) for tag in general_blacklist])
         and not any([bool(tag in image_data["tag_string_meta"]) for tag in meta_blacklist])):
             image = Image.open(requests.get(image_data["file_url"], stream=True).raw).convert('RGBA')
