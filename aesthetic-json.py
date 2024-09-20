@@ -17,6 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from transformers import pipeline
 from tqdm import tqdm
 
+image_ext = ".webp"
 device = "cuda" if torch.cuda.is_available() else "cpu" # else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available()
 steps_after_gc = -1
 
@@ -120,10 +121,14 @@ if __name__ == '__main__':
     image_paths = []
 
     for json_path in tqdm(file_list):
-        with open(json_path, "r") as f:
-            json_data = json.load(f)
-        if json_data.get("aesthetic-shadow-v2", None) is None:
-            image_paths.append(os.path.splitext(json_path)[0]+".webp")
+        try:
+            with open(json_path, "r") as f:
+                json_data = json.load(f)
+            image_path = os.path.splitext(json_path)[0]+image_ext
+            if json_data.get("aesthetic-shadow-v2", None) is None and os.path.exists(image_path):
+                image_paths.append(image_path)
+        except Exception:
+            print(f"ERROR: {image_path}")
 
     epoch_len = len(image_paths)
     image_backend = ImageBackend(image_paths)

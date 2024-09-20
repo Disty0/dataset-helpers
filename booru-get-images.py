@@ -67,14 +67,36 @@ meta_blacklist = [
 
 
 for id in tqdm(range(args.start, args.end)):
-    try:
-        folder = str(int(id / 10000))
-        os.makedirs(folder, exist_ok=True)
-        image_data = client.post_show(id)
+    folder = str(int(id / 10000))
+    image_path = os.path.join(folder, f"{id}.webp")
+
+    if not (os.path.exists(image_path) and os.path.getsize(image_path) != 0):
+        json_path = os.path.join(folder, f"{id}.json")
+    
+        if os.path.exists(json_path) and os.path.getsize(json_path) != 0:
+            with open(json_path, "r") as f:
+                image_data = json.load(f)
+        else:
+            try:
+                time.sleep(0.25)
+                image_data = client.post_show(id)
+                os.makedirs(folder, exist_ok=True)
+                with open(json_path, "w") as f:
+                    json.dump(image_data, f)
+            except Exception as e:
+                str_e = str(e)
+                if not ("In _request: 404 - Not Found" in str_e and str_e.endswith(".json")):
+                    os.makedirs("errors", exist_ok=True)
+                    error_file = open(f"errors/errors_json{args.start}.txt", 'a')
+                    error_file.write(f"ERROR: {id} MESSAGE: {str_e}\n")
+                    error_file.close()
+                continue
+
         width = int(image_data["image_width"])
         height = int(image_data["image_height"])
         image_size = width * height
         general_tags = image_data["tag_string_general"].split(" ")
+
         if (image_data["file_ext"] not in {"avi", "gif", "html", "mp3", "mp4", "mpg", "pdf", "rar", "swf", "webm", "wmv", "zip"}
         and image_size > 768000
         and not image_data["is_banned"]
@@ -82,22 +104,23 @@ for id in tqdm(range(args.start, args.end)):
         and not image_data["is_deleted"]
         and not any([bool(tag in general_tags) for tag in general_blacklist])
         and not any([bool(tag in image_data["tag_string_meta"]) for tag in meta_blacklist])):
-            image = Image.open(requests.get(image_data["file_url"], stream=True).raw).convert('RGBA')
-            if image_size > 4194304: # 2048x2048
-                scale = math.sqrt(image_size / 4194304)
-                new_width = int(width/scale)
-                new_height = int(height/scale)
-                image = image.resize((new_width, new_height), Image.LANCZOS)
-            image.save(os.path.join(folder, f"{id}.webp"), "WEBP", quality=99)
-            image.close()
-            with open(os.path.join(folder, f"{id}.json"), "w") as f:
-                json.dump(image_data, f)
-        else:
-            time.sleep(0.25)
-    except Exception as e:
-        os.makedirs("errors", exist_ok=True)
-        error_file = open(f"errors/errors{args.start}.txt", 'a')
-        error_file.write(f"ERROR: {id} MESSAGE: {e} \n")
-        error_file.close()
-
-
+            try:
+                image = Image.open(requests.get(image_data["file_url"], stream=True).raw).convert('RGBA')
+                if image_size > 4194304: # 2048x2048
+                    scale = math.sqrt(image_size / 4194304)
+                    new_width = int(width/scale)
+                    new_height = int(height/scale)
+                    image = image.resize((new_width, new_height), Image.LANCZOS)
+                image.save(image_path, "WEBP", quality=99)
+                image.close()
+                os.makedirs("out", exist_ok=True)
+                out_file = open(f"out/out_{args.start}.txt", 'a')
+                out_file.write(f"{folder}/{id}\n")
+                out_file.close()
+            except Exception as e:
+                str_e = str(e)
+                if str_e != "'file_url'":
+                    os.makedirs("errors", exist_ok=True)
+                    error_file = open(f"errors/errors{args.start}.txt", 'a')
+                    error_file.write(f"ERROR: {id} MESSAGE: {str_e}\n")
+                    error_file.close()

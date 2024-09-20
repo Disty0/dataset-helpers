@@ -154,10 +154,14 @@ if __name__ == '__main__':
     image_paths = []
 
     for json_path in tqdm(file_list):
-        with open(json_path, "r") as f:
-            json_data = json.load(f)
-        if json_data.get("wd-aes-b32-v0", None) is None:
-            image_paths.append(os.path.splitext(json_path)[0]+image_ext)
+        try:
+            with open(json_path, "r") as f:
+                json_data = json.load(f)
+            image_path = os.path.splitext(json_path)[0]+image_ext
+            if json_data.get("wd-aes-b32-v0", None) is None and os.path.exists(image_path):
+                image_paths.append(image_path)
+        except Exception:
+            print(f"ERROR: {image_path}")
 
     batches = []
     current_batch = []
