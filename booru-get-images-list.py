@@ -10,6 +10,7 @@ import requests
 from PIL import Image
 from tqdm import tqdm
 
+Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 pybooru.resources.SITE_LIST["shima"] = {"url": "https://shima.donmai.us/"}
 client = pybooru.Danbooru('shima')
 
@@ -114,6 +115,8 @@ for id in tqdm(id_list):
         and not any([bool(tag in general_tags) for tag in general_blacklist])
         and not any([bool(tag in image_data["tag_string_meta"]) for tag in meta_blacklist])):
             try:
+                #with open(os.path.join(folder, f"{id}.bin"), "wb") as f:
+                #    f.write(requests.get(image_data["file_url"], stream=True).raw.read())
                 image = Image.open(requests.get(image_data["file_url"], stream=True).raw).convert('RGBA')
                 if image_size > 4194304: # 2048x2048
                     scale = math.sqrt(image_size / 4194304)

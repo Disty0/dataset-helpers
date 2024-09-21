@@ -10,6 +10,7 @@ import requests
 from PIL import Image
 from tqdm import tqdm
 
+Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 pybooru.resources.SITE_LIST["shima"] = {"url": "https://shima.donmai.us/"}
 client = pybooru.Danbooru('shima')
 
