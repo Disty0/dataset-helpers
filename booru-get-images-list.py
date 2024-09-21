@@ -75,7 +75,7 @@ for id in id_list:
         new_id_list.append(int(id))
 id_list = new_id_list
 
-for id in tqdm(range(args.start, args.end)):
+for id in tqdm(id_list):
     folder = str(int(id / 10000))
     image_path = os.path.join(folder, f"{id}.webp")
 
@@ -96,7 +96,7 @@ for id in tqdm(range(args.start, args.end)):
                 str_e = str(e)
                 if not ("In _request: 404 - Not Found" in str_e and str_e.endswith(".json")):
                     os.makedirs("errors", exist_ok=True)
-                    error_file = open(f"errors/errors_json{args.start}.txt", 'a')
+                    error_file = open("errors/errors_json_list.txt", 'a')
                     error_file.write(f"ERROR: {id} MESSAGE: {str_e}\n")
                     error_file.close()
                 continue
@@ -123,13 +123,13 @@ for id in tqdm(range(args.start, args.end)):
                 image.save(image_path, "WEBP", quality=99)
                 image.close()
                 os.makedirs("out", exist_ok=True)
-                out_file = open(f"out/out_{args.start}.txt", 'a')
+                out_file = open("out/out_list.txt", 'a')
                 out_file.write(f"{folder}/{id}\n")
                 out_file.close()
             except Exception as e:
                 str_e = str(e)
                 if str_e != "'file_url'":
                     os.makedirs("errors", exist_ok=True)
-                    error_file = open(f"errors/errors{args.start}.txt", 'a')
+                    error_file = open("errors/errors_list.txt", 'a')
                     error_file.write(f"ERROR: {id} MESSAGE: {str_e}\n")
                     error_file.close()
