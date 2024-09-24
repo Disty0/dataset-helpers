@@ -160,8 +160,8 @@ if __name__ == '__main__':
             image_path = os.path.splitext(json_path)[0]+image_ext
             if json_data.get("wd-aes-b32-v0", None) is None and os.path.exists(image_path):
                 image_paths.append(image_path)
-        except Exception:
-            print(f"ERROR: {image_path}")
+        except Exception as e:
+            print(f"ERROR: {json_path} MESSAGE: {e}")
 
     batches = []
     current_batch = []
