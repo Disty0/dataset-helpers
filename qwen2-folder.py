@@ -2,32 +2,29 @@
 
 import os
 import gc
+import math
 import glob
 import json
 import time
 import atexit
 import torch
 try:
-    import transformers # ipex hijacks transformers and makes it unable to load a model
-    backup_get_class_from_dynamic_module = transformers.dynamic_module_utils.get_class_from_dynamic_module
     import intel_extension_for_pytorch as ipex
-    ipex.llm.utils._get_class_from_dynamic_module = backup_get_class_from_dynamic_module
-    transformers.dynamic_module_utils.get_class_from_dynamic_module = backup_get_class_from_dynamic_module
 except Exception:
     pass
 from PIL import Image
 from queue import Queue
-from transformers import AutoModelForCausalLM, AutoProcessor
+from transformers import Qwen2VLForConditionalGeneration, AutoProcessor, LogitsProcessor
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 
-batch_size = 8
+batch_size = 1
 image_ext = ".webp"
-model_id = "MiaoshouAI/Florence-2-base-PromptGen-v1.5"
-revision = "c06a5f02cc6071a5d65ee5d294cf3732d3097540"
+max_image_size = 1048576 # 1024x1024
+model_id = "Ertugrul/Qwen2-VL-7B-Captioner-Relaxed"
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
-dtype = torch.float16 if "cuda" in device else torch.bfloat16 if "xpu" in device else torch.float32
-use_flash_atten = "cuda" in device
+dtype = torch.bfloat16
+use_flash_atten = "cuda" in device and torch.version.cuda
 steps_after_gc = -1
 
 
@@ -44,6 +41,23 @@ if not use_flash_atten:
         transformers.dynamic_module_utils.get_imports = fixed_get_imports
     except Exception:
         pass
+if torch.version.hip:
+    try:
+        # don't use this for training models, only for inference with latent encoder and embed encoder
+        # https://github.com/huggingface/diffusers/discussions/7172
+        from functools import wraps
+        from flash_attn import flash_attn_func
+        backup_sdpa = torch.nn.functional.scaled_dot_product_attention
+        @wraps(torch.nn.functional.scaled_dot_product_attention)
+        def sdpa_hijack(query, key, value, attn_mask=None, dropout_p=0.0, is_causal=False, scale=None):
+            if query.shape[-1] <= 128 and attn_mask is None and query.dtype != torch.float32:
+                return flash_attn_func(q=query.transpose(1, 2), k=key.transpose(1, 2), v=value.transpose(1, 2), dropout_p=dropout_p, causal=is_causal, softmax_scale=scale).transpose(1, 2)
+            else:
+                return backup_sdpa(query=query, key=key, value=value, attn_mask=attn_mask, dropout_p=dropout_p, is_causal=is_causal, scale=scale)
+        torch.nn.functional.scaled_dot_product_attention = sdpa_hijack
+    except Exception as e:
+        print(f"Failed to enable Flash Atten for ROCm: {e}")
+
 
 
 meta_blacklist = [
@@ -243,6 +257,18 @@ def get_aesthetic_tag(score):
 def get_tags_from_json(json_path):
     with open(json_path, "r") as json_file:
         json_data = json.load(json_file)
+    copyright_tags = ""
+    for char in json_data["tag_string_character"].split(" "):
+        if char:
+            copyright_tags += f", character {char.replace('_', ' ')}"
+    for cpr in json_data["tag_string_copyright"].split(" "):
+        if cpr:
+            copyright_tags += f", from {cpr.replace('_', ' ')}"
+    for artist in json_data["tag_string_artist"].split(" "):
+        if artist:
+            copyright_tags += f", art by {artist.replace('_', ' ')}"
+    if copyright_tags:
+        copyright_tags = copyright_tags[2:]
     line = f"year {json_data['created_at'][:4]}"
     for tag in json_data["tag_string_general"].split(" "):
         if tag:
@@ -258,19 +284,10 @@ def get_tags_from_json(json_path):
         line += ", nsfw"
     elif json_data["rating"] == "e":
         line += ", explicit nsfw"
-    for char in json_data["tag_string_character"].split(" "):
-        if char:
-            line += f", character {char.replace('_', ' ')}"
-    for cpr in json_data["tag_string_copyright"].split(" "):
-        if cpr:
-            line += f", from {cpr.replace('_', ' ')}"
-    for artist in json_data["tag_string_artist"].split(" "):
-        if artist:
-            line += f", art by {artist.replace('_', ' ')}"
     if json_data.get('aesthetic-shadow-v2', None) is not None:
         line += f", {get_aesthetic_tag(json_data['aesthetic-shadow-v2'])}"
     line += f", {get_quality_tag(json_data)}"
-    return line
+    return line, copyright_tags
 
 
 class ImageBackend():
@@ -305,16 +322,19 @@ class ImageBackend():
                 images = []
                 image_paths = []
                 prompts = []
+                copyright_tags = ""
                 for batch in batches:
-                    image, image_path, prompt = self.load_from_file(batch)
+                    image, image_path, prompt, char_tag = self.load_from_file(batch)
                     images.append(image)
                     image_paths.append(image_path)
                     prompts.append(prompt)
-                inputs = self.processor(text=prompts, images=images, return_tensors="pt", padding="longest", max_length=769, truncation=True) # 769 = 577 image + 192 text. max_length > 769 is too slow.
-                attention_mask_image = torch.ones((inputs["attention_mask"].shape[0], 577), device=inputs["attention_mask"].device, dtype=inputs["attention_mask"].dtype)
-                inputs["attention_mask"] = torch.cat([attention_mask_image, inputs["attention_mask"]], dim=1) # add atten mask for the image
-                inputs["pixel_values"] = inputs["pixel_values"].to(dtype=dtype, memory_format=torch.channels_last)
-                self.load_queue.put([inputs, image_paths])
+                    if char_tag:
+                        copyright_tags += " " + char_tag
+                if copyright_tags:
+                    copyright_tags = copyright_tags[1:].replace(" character ", " ").replace(" from ", " ").replace(" art by ", " ").replace(", ", " ")
+                inputs = self.processor(text=prompts, images=images, padding="longest", return_tensors="pt")
+                inputs["pixel_values"] = inputs["pixel_values"].to(dtype=dtype)
+                self.load_queue.put([inputs, image_paths, copyright_tags])
                 self.load_queue_lenght += 1
             else:
                 time.sleep(5)
@@ -323,16 +343,37 @@ class ImageBackend():
 
 
     def load_from_file(self, image_path):
-        base_prompt = "Describe this anime image. Describe the overall art style and the quality of this anime image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions, intimacy, vulnerability and sensuality as well. Pretend that anime and cartoon is the reality. If you are not sure about something, then don't mention it."
+        copyright_tags = ""
+        prompt = "Describe this anime image in detail. Describe the art style, anime style and the quality of this anime image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions as well. Pretend that anime and cartoon is the reality. Don't overdetail the caption."
         json_path = os.path.splitext(image_path)[0]+".json"
         if os.path.exists(json_path):
-            prompt = f"{base_prompt} These are the tags for the anime image, you can use them for guidence: {get_tags_from_json(json_path)}"
-        else:
-            prompt = base_prompt
-        image = Image.open(image_path).convert("RGBA")
+            booru_tags, copyright_tags = get_tags_from_json(json_path)
+            if copyright_tags:
+                prompt += " These are the character, series and artist names for this anime image, use them: " + copyright_tags + "."
+            prompt += " These are the tags for this anime image, you can use them for guidence: " + booru_tags
+        conversation = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                    },
+                    {"type": "text", "text": prompt},
+                ],
+            }
+        ]
+        text_prompt = self.processor.apply_chat_template(conversation, add_generation_prompt=True)
+        image = Image.open(image_path)
+        width, height = image.size
+        image_size = width * height
+        if image_size > max_image_size:
+            scale = math.sqrt(image_size / max_image_size)
+            new_width = int(width/scale)
+            new_height = int(height/scale)
+            image = image.resize((new_width, new_height), Image.LANCZOS)
         background = Image.new('RGBA', image.size, (255, 255, 255))
-        image = Image.alpha_composite(background, image).convert("RGB")
-        return [image, image_path, prompt]
+        image = Image.alpha_composite(background, image.convert("RGBA")).convert("RGB")
+        return [image, image_path, text_prompt, copyright_tags]
 
 
 class SaveCaptionBackend():
@@ -353,7 +394,7 @@ class SaveCaptionBackend():
         while self.keep_saving:
             if not self.save_queue.empty():
                 generated_ids, image_paths = self.save_queue.get()
-                generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True)
+                generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=True)
                 for i in range(len(image_paths)):
                     self.save_to_file(generated_text[i], os.path.splitext(image_paths[i])[0]+".txt")
             else:
@@ -368,25 +409,50 @@ class SaveCaptionBackend():
         caption_file.close()
 
 
+# qwen2 stops generating when it writes a coptyright name
+# blackist the end and the image pad tokens when the generation lenght is too short or the last word is a copyright
+class UncensorQwen2(LogitsProcessor):
+    def __call__(self, input_ids, scores):
+        global input_ids_len, copyright_tags, processor
+        generation_lenght = input_ids.shape[-1] - input_ids_len
+        if generation_lenght < 64:
+            for i in range(scores.shape[0]):
+                scores[i][151645] = 0
+                scores[i][151655] = 0
+        else:
+            for i in range(scores.shape[0]):
+                max_id = torch.argmax(scores)
+                if (copyright_tags and (max_id == 151645 or max_id == 151655) and generation_lenght < 384
+                and processor.decode(input_ids[i][-25:]).lower().split("\n")[-1].split(" ")[-1] in copyright_tags):
+                        scores[i][151645] = 0
+                        scores[i][151655] = 0
+                elif max_id == 151655:
+                    # stop if the next token is the image pad
+                    # qwen2 spams this token until it hits the max token limit
+                    scores[i][151645] = scores[0][151655]
+                    scores[i][151655] = 0
+        return scores
+
+
 if __name__ == '__main__':
-    processor = AutoProcessor.from_pretrained(model_id, revision=revision, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id, revision=revision, trust_remote_code=True, torch_dtype=dtype,
-        attn_implementation="flash_attention_2" if use_flash_atten else None,
-    ).to(device, dtype=dtype, memory_format=torch.channels_last).eval()
+    processor = AutoProcessor.from_pretrained(model_id)
+    logits_processor = UncensorQwen2()
+    model = Qwen2VLForConditionalGeneration.from_pretrained(
+        model_id, torch_dtype=dtype,
+        attn_implementation="flash_attention_2" if use_flash_atten else "sdpa"
+    ).to(device, dtype=dtype).eval()
     model.requires_grad_(False)
-    model.vision_tower.to(memory_format=torch.channels_last).eval()
-    model.vision_tower.requires_grad_(False)
-    model.language_model.eval()
-    model.language_model.requires_grad_(False)
+    model.visual.eval()
+    model.visual.requires_grad_(False)
+    model.model.eval()
+    model.model.requires_grad_(False)
 
     if "xpu" in device:
-        model.vision_tower = ipex.llm.optimize(model.vision_tower, device=device, dtype=dtype, inplace=True)
-        model.language_model = ipex.llm.optimize(model.language_model, device=device, dtype=dtype, inplace=True)
+        model.visual = ipex.llm.optimize(model.visual, device=device, dtype=dtype, inplace=True)
+        model.model = ipex.llm.optimize(model.model, device=device, dtype=dtype, inplace=True)
     else:
         #torch.cuda.tunable.enable(val=True)
-        model.vision_tower = torch.compile(model.vision_tower, mode="max-autotune", backend="inductor")
-        model.language_model = torch.compile(model.language_model, mode="max-autotune", backend="inductor")
+        model = torch.compile(model, mode="max-autotune", backend="inductor")
 
 
     print(f"Searching for {image_ext} files...")
@@ -421,15 +487,19 @@ if __name__ == '__main__':
     with torch.no_grad():
         for _ in tqdm(range(epoch_len)):
             try:
-                inputs, image_paths = image_backend.get_images()
-                generated_ids = model.generate(
-                    input_ids=inputs["input_ids"].to(device),
-                    pixel_values=inputs["pixel_values"].to(device),
-                    attention_mask=inputs["attention_mask"].to(device),
+                inputs, image_paths, copyright_tags = image_backend.get_images()
+                inputs = inputs.to(device)
+                input_ids_len = inputs["input_ids"].shape[-1]
+                output_ids = model.generate(
+                    **inputs,
                     max_new_tokens=512,
-                    do_sample=False,
-                    num_beams=3
+                    use_cache=True,
+                    logits_processor=[logits_processor],
                 )
+                generated_ids = [
+                    output_ids[len(input_ids) :]
+                    for input_ids, output_ids in zip(inputs.input_ids, output_ids)
+                ]
                 save_backend.save(generated_ids, image_paths)
             except Exception as e:
                 os.makedirs("errors", exist_ok=True)

@@ -128,31 +128,89 @@ fav_count_percentile_full = {
 }
 
 
-def get_quality_tag(score, rating):
+quality_score_to_tag = {
+    7: "best quality",
+    6: "high quality",
+    5: "great quality",
+    4: "medium quality",
+    3: "normal quality",
+    2: "bad quality",
+    1: "low quality",
+    0: "worst quality",
+}
+
+
+def get_quality_score_from_rating(score, rating):
     percentile = fav_count_percentile_full[rating]
     if score > percentile[95]:
-        quality_tag = "best quality"
+        return 7
     elif score > percentile[90]:
-        quality_tag = "high quality"
+        return 6
     elif score > percentile[75]:
-        quality_tag = "great quality"
+        return 5
     elif score > percentile[50]:
-        quality_tag = "medium quality"
+        return 4
     elif score > percentile[25]:
-        quality_tag = "normal quality"
+        return 3
     elif score > percentile[10]:
-        quality_tag = "bad quality"
+        return 2
     elif score > percentile[5]:
-        quality_tag = "low quality"
+        return 1
     else:
-        quality_tag = "worst quality"
-    return quality_tag
+        return 0
+
+def get_quality_tag_from_wd(score):
+    if score > 0.98:
+        return 7
+    elif score > 0.90:
+        return 6
+    elif score > 0.75:
+        return 5
+    elif score > 0.50:
+        return 4
+    elif score > 0.25:
+        return 3
+    elif score > 0.125:
+        return 2
+    elif score > 0.025:
+        return 1
+    else:
+        return 0
+
+def get_quality_tag(json_data):
+    quality_score = get_quality_score_from_rating(json_data.get("fav_count", json_data["score"]), json_data["rating"])
+    if json_data["id"] > 7000000:
+        wd_quality_score = get_quality_tag_from_wd(json_data.get("wd-aes-b32-v0", 0))
+        quality_score = max(quality_score, wd_quality_score)
+    return quality_score_to_tag[quality_score]
+
+
+def get_aesthetic_tag(score):
+    if score > 0.92:
+        return "extremely aesthetic"
+    elif score > 0.85:
+        return "very aesthetic"
+    elif score > 0.75:
+        return "aesthetic"
+    elif score > 0.50:
+        return "slightly aesthetic"
+    elif score > 0.40:
+        return "not aesthetic"
+    elif score > 0.30:
+        return "not displeasing"
+    elif score > 0.20:
+        return "slightly displeasing"
+    elif score > 0.10:
+        return "displeasing"
+    else:
+        return "very displeasing"
 
 
 def get_tags_from_json(json_path):
     with open(json_path, "r") as json_file:
         json_data = json.load(json_file)
-    line = get_quality_tag(json_data.get("fav_count", json_data["score"]), json_data["rating"])
+    line = get_aesthetic_tag(json_data['aesthetic-shadow-v2'])
+    line += f", {get_quality_tag(json_data)}"
     line += f", year {json_data['created_at'][:4]}"
     for artist in json_data["tag_string_artist"].split(" "):
         if artist:

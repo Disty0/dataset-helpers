@@ -40,22 +40,18 @@ def remove_old_tag(text):
 
 
 def get_aesthetic_tag(score):
-    if score > 1.50: # out of the scale
-        return "out of the scale aesthetic"
-    if score > 1.10: # out of the scale
-        return "masterpiece"
-    elif score > 0.90:
+    if score > 0.92:
         return "extremely aesthetic"
-    elif score > 0.80:
+    elif score > 0.85:
         return "very aesthetic"
-    elif score > 0.70:
+    elif score > 0.75:
         return "aesthetic"
     elif score > 0.50:
         return "slightly aesthetic"
     elif score > 0.40:
-        return "not displeasing"
-    elif score > 0.30:
         return "not aesthetic"
+    elif score > 0.30:
+        return "not displeasing"
     elif score > 0.20:
         return "slightly displeasing"
     elif score > 0.10:
