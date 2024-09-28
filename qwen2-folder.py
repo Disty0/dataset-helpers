@@ -9,7 +9,8 @@ import time
 import atexit
 import torch
 try:
-    import intel_extension_for_pytorch as ipex
+    #import intel_extension_for_pytorch as ipex
+    import ipex_llm
 except Exception:
     pass
 from PIL import Image
@@ -396,6 +397,7 @@ class SaveCaptionBackend():
                 generated_ids, image_paths = self.save_queue.get()
                 generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=True)
                 for i in range(len(image_paths)):
+                    generated_text[i] = generated_text[i].replace("Describe this anime image in detail.", "").replace("Describe the anime style, anime style and the quality of this anime image as well.", "").replace("Describe nudity, sex, sexual intercourse, sex", "")
                     self.save_to_file(generated_text[i], os.path.splitext(image_paths[i])[0]+".txt")
             else:
                 time.sleep(0.1)
@@ -438,9 +440,9 @@ if __name__ == '__main__':
     processor = AutoProcessor.from_pretrained(model_id)
     logits_processor = UncensorQwen2()
     model = Qwen2VLForConditionalGeneration.from_pretrained(
-        model_id, torch_dtype=dtype,
-        attn_implementation="flash_attention_2" if use_flash_atten else "sdpa"
-    ).to(device, dtype=dtype).eval()
+        model_id, torch_dtype=dtype, device_map=device if "xpu" not in device else "cpu",
+        attn_implementation="flash_attention_2" if use_flash_atten else None,
+    ).to(dtype=dtype).eval()
     model.requires_grad_(False)
     model.visual.eval()
     model.visual.requires_grad_(False)
@@ -448,11 +450,8 @@ if __name__ == '__main__':
     model.model.requires_grad_(False)
 
     if "xpu" in device:
-        model.visual = ipex.llm.optimize(model.visual, device=device, dtype=dtype, inplace=True)
-        model.model = ipex.llm.optimize(model.model, device=device, dtype=dtype, inplace=True)
-    else:
-        #torch.cuda.tunable.enable(val=True)
-        model = torch.compile(model, mode="max-autotune", backend="inductor")
+        model = ipex_llm.optimize_model(model, low_bit="sym_int8")
+        model = model.to(device)
 
 
     print(f"Searching for {image_ext} files...")
@@ -507,7 +506,7 @@ if __name__ == '__main__':
                 error_file.write(f"ERROR: {image_paths} MESSAGE: {e} \n")
                 error_file.close()
             steps_after_gc = steps_after_gc + 1
-            if steps_after_gc == 0 or steps_after_gc >= 10000:
+            if steps_after_gc == 0 or steps_after_gc >= 256 if "xpu" not in device else 1:
                 if "cpu" not in device:
                     getattr(torch, torch.device(device).type).synchronize()
                     getattr(torch, torch.device(device).type).empty_cache()
