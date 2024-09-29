@@ -73,100 +73,47 @@ meta_blacklist = [
     "photoshop_(medium)",
 ]
 
-# From KohakuBlueleaf/HakuBooru
-fav_count_percentile_full = {
+
+danbooru_quality_scores = {
     "g": {
-        5: 1,
-        10: 1,
-        15: 2,
-        20: 3,
-        25: 3,
-        30: 4,
-        35: 5,
-        40: 6,
-        45: 7,
-        50: 8,
-        55: 9,
-        60: 10,
-        65: 12,
-        70: 14,
-        75: 16,
-        80: 18,
-        85: 22,
-        90: 27,
-        95: 37,
+        1: 20,
+        2: 25,
+        3: 30,
+        4: 35,
+        5: 40,
+        6: 45,
     },
     "s": {
-        5: 1,
-        10: 2,
-        15: 4,
-        20: 5,
-        25: 6,
-        30: 8,
-        35: 9,
-        40: 11,
-        45: 13,
-        50: 15,
-        55: 17,
-        60: 19,
-        65: 22,
-        70: 26,
-        75: 30,
-        80: 36,
-        85: 44,
-        90: 56,
-        95: 81,
+        1: 20,
+        2: 35,
+        3: 50,
+        4: 75,
+        5: 100,
+        6: 120,
     },
     "q": {
-        5: 4,
-        10: 8,
-        15: 11,
-        20: 14,
-        25: 18,
-        30: 21,
-        35: 25,
-        40: 29,
-        45: 33,
-        50: 38,
-        55: 43,
-        60: 49,
-        65: 56,
-        70: 65,
-        75: 75,
-        80: 88,
-        85: 105,
-        90: 132,
-        95: 182,
+        1: 50,
+        2: 75,
+        3: 100,
+        4: 125,
+        5: 150,
+        6: 200,
     },
     "e": {
-        5: 4,
-        10: 9,
-        15: 13,
-        20: 18,
-        25: 22,
-        30: 27,
-        35: 33,
-        40: 39,
-        45: 45,
-        50: 52,
-        55: 60,
-        60: 69,
-        65: 79,
-        70: 92,
-        75: 106,
-        80: 125,
-        85: 151,
-        90: 190,
-        95: 262,
+        1: 100,
+        2: 150,
+        3: 200,
+        4: 250,
+        5: 300,
+        6: 350,
     },
 }
 
 
 quality_score_to_tag = {
-    7: "best quality",
-    6: "high quality",
-    5: "great quality",
-    4: "medium quality",
+    6: "best quality",
+    5: "high quality",
+    4: "great quality",
     3: "normal quality",
     2: "bad quality",
     1: "low quality",
@@ -175,66 +122,57 @@ quality_score_to_tag = {
 
 
 def get_quality_score_from_rating(score, rating):
-    percentile = fav_count_percentile_full[rating]
-    if score > percentile[95]:
-        return 7
-    elif score > percentile[90]:
+    if score > danbooru_quality_scores[rating][6]:
         return 6
-    elif score > percentile[75]:
+    elif score > danbooru_quality_scores[rating][5]:
         return 5
-    elif score > percentile[50]:
+    elif score > danbooru_quality_scores[rating][4]:
         return 4
-    elif score > percentile[25]:
+    elif score > danbooru_quality_scores[rating][3]:
         return 3
-    elif score > percentile[10]:
+    elif score > danbooru_quality_scores[rating][2]:
         return 2
-    elif score > percentile[5]:
+    elif score > danbooru_quality_scores[rating][1]:
         return 1
     else:
         return 0
 
+
 def get_quality_tag_from_wd(score):
-    if score > 0.98:
-        return 7
-    elif score > 0.90:
+    if score > 0.97:
         return 6
-    elif score > 0.75:
+    elif score > 0.92:
         return 5
-    elif score > 0.50:
+    elif score > 0.75:
         return 4
-    elif score > 0.25:
+    elif score > 0.30:
         return 3
-    elif score > 0.125:
+    elif score > 0.08:
         return 2
-    elif score > 0.025:
+    elif score > 0.01:
         return 1
     else:
         return 0
+
 
 def get_quality_tag(json_data):
     quality_score = get_quality_score_from_rating(json_data.get("fav_count", json_data["score"]), json_data["rating"])
-    if json_data["id"] > 7000000:
+    if int(json_data["id"]) > 7000000:
         wd_quality_score = get_quality_tag_from_wd(json_data.get("wd-aes-b32-v0", 0))
         quality_score = max(quality_score, wd_quality_score)
     return quality_score_to_tag[quality_score]
 
 
 def get_aesthetic_tag(score):
-    if score > 0.92:
-        return "extremely aesthetic"
-    elif score > 0.85:
+    if score > 0.925:
         return "very aesthetic"
-    elif score > 0.75:
+    elif score > 0.90:
         return "aesthetic"
-    elif score > 0.50:
+    elif score > 0.875:
         return "slightly aesthetic"
-    elif score > 0.40:
-        return "not aesthetic"
-    elif score > 0.30:
-        return "not displeasing"
-    elif score > 0.20:
+    elif score > 0.825:
         return "slightly displeasing"
-    elif score > 0.10:
+    elif score > 0.725:
         return "displeasing"
     else:
         return "very displeasing"

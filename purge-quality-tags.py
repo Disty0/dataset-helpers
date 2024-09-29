@@ -34,7 +34,7 @@ def write_caption_to_file(file_name):
     
 
 print("Searching for TXT files...")
-file_list = glob.glob('./*.txt')
+file_list = glob.glob('**/*.txt')
 
 
 for text in tqdm(file_list):

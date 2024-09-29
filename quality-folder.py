@@ -46,12 +46,9 @@ class Classifier(torch.nn.Module):
 
 
 def remove_old_tag(text):
-    text = text.removeprefix("out of the scale quality, ")
-    text = text.removeprefix("masterpiece, ")
     text = text.removeprefix("best quality, ")
     text = text.removeprefix("high quality, ")
     text = text.removeprefix("great quality, ")
-    text = text.removeprefix("medium quality, ")
     text = text.removeprefix("normal quality, ")
     text = text.removeprefix("bad quality, ")
     text = text.removeprefix("low quality, ")
@@ -60,23 +57,17 @@ def remove_old_tag(text):
 
    
 def get_quality_tag(score):
-    if score > 1.50: # way out of the scale
-        return "out of the scale quality"
-    elif score > 1.10: # out of the scale
-        return "masterpiece"
-    elif score > 0.98:
+    if score > 0.97:
         return "best quality"
-    elif score > 0.90:
+    elif score > 0.92:
         return "high quality"
     elif score > 0.75:
         return "great quality"
-    elif score > 0.50:
-        return "medium quality"
-    elif score > 0.25:
+    elif score > 0.30:
         return "normal quality"
-    elif score > 0.125:
+    elif score > 0.08:
         return "bad quality"
-    elif score > 0.025:
+    elif score > 0.01:
         return "low quality"
     else:
         return "worst quality"

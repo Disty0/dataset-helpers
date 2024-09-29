@@ -16,22 +16,16 @@ from concurrent.futures import ThreadPoolExecutor
 from transformers import pipeline
 from tqdm import tqdm
 
+image_ext = ".webp"
 device = "cuda" if torch.cuda.is_available() else "cpu" # else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available()
 steps_after_gc = -1
 
 
 def remove_old_tag(text):
-    text = text.removeprefix("out of the scale aesthetic, ")
-    text = text.removeprefix("masterpiece, ")
-    text = text.removeprefix("extremely aesthetic, ")
     text = text.removeprefix("very aesthetic, ")
-    text = text.removeprefix("asthetic, ")
+
     text = text.removeprefix("aesthetic, ")
-    text = text.removeprefix("slightly asthetic, ")
     text = text.removeprefix("slightly aesthetic, ")
-    text = text.removeprefix("not displeasing, ")
-    text = text.removeprefix("not asthetic, ")
-    text = text.removeprefix("not aesthetic, ")
     text = text.removeprefix("slightly displeasing, ")
     text = text.removeprefix("displeasing, ")
     text = text.removeprefix("very displeasing, ")
@@ -40,21 +34,15 @@ def remove_old_tag(text):
 
 
 def get_aesthetic_tag(score):
-    if score > 0.92:
-        return "extremely aesthetic"
-    elif score > 0.85:
+    if score > 0.925:
         return "very aesthetic"
-    elif score > 0.75:
+    elif score > 0.90:
         return "aesthetic"
-    elif score > 0.50:
+    elif score > 0.875:
         return "slightly aesthetic"
-    elif score > 0.40:
-        return "not aesthetic"
-    elif score > 0.30:
-        return "not displeasing"
-    elif score > 0.20:
+    elif score > 0.825:
         return "slightly displeasing"
-    elif score > 0.10:
+    elif score > 0.725:
         return "displeasing"
     else:
         return "very displeasing"
@@ -158,8 +146,8 @@ if __name__ == '__main__':
     #    torch.cuda.tunable.enable(val=True)
     #    pipe.model = torch.compile(pipe.model, mode="max-autotune", backend="inductor")
 
-    print("Searching for WEBP files...")
-    file_list = glob.glob('./**/*.webp')
+    print(f"Searching for {image_ext} files...")
+    file_list = glob.glob(f'**/*{image_ext}')
     epoch_len = len(file_list)
     image_backend = ImageBackend(file_list)
     save_backend = SaveAestheticBackend()
@@ -182,7 +170,6 @@ if __name__ == '__main__':
             try:
                 image, image_path = image_backend.get_images()[0]
                 model_out = pipe(images=[image])[0]
-                image.close()
                 if model_out[0]["label"] == "hq":
                     prediction = model_out[0]["score"]
                 elif model_out[1]["label"] == "hq":
@@ -191,7 +178,7 @@ if __name__ == '__main__':
                 save_backend.save(aesthetic_tag, os.path.splitext(image_path)[0]+".txt")
             except Exception as e:
                 os.makedirs("errors", exist_ok=True)
-                error_file = open("errors/errors.txt", 'a')
+                error_file = open("errors/errors_aesthetic.txt", 'a')
                 error_file.write(f"ERROR: {image_path} MESSAGE: {e} \n")
                 error_file.close()
             steps_after_gc = steps_after_gc + 1
