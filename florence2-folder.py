@@ -39,7 +39,10 @@ if not use_flash_atten:
             if not str(filename).endswith("modeling_florence2.py"):
                 return get_imports(filename)
             imports = get_imports(filename)
-            imports.remove("flash_attn")
+            try:
+                imports.remove("flash_attn")
+            except Exception:
+                pass
             return imports
         transformers.dynamic_module_utils.get_imports = fixed_get_imports
     except Exception:
@@ -320,8 +323,9 @@ if __name__ == '__main__':
     model.language_model.requires_grad_(False)
 
     if "xpu" in device:
-        model.vision_tower = ipex.llm.optimize(model.vision_tower, device=device, dtype=dtype, inplace=True)
-        model.language_model = ipex.llm.optimize(model.language_model, device=device, dtype=dtype, inplace=True)
+        #model.vision_tower = ipex.llm.optimize(model.vision_tower, device=device, dtype=dtype, inplace=True)
+        #model.language_model = ipex.llm.optimize(model.language_model, device=device, dtype=dtype, inplace=True)
+        pass
     else:
         #torch.cuda.tunable.enable(val=True)
         model.vision_tower = torch.compile(model.vision_tower, mode="max-autotune", backend="inductor")
