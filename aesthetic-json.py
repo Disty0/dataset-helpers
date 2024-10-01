@@ -115,17 +115,17 @@ if __name__ == '__main__':
     #    torch.cuda.tunable.enable(val=True)
     #    pipe.model = torch.compile(pipe.model, mode="max-autotune", backend="inductor")
 
-    print("Searching for JSON files...")
-    file_list = glob.glob('./**/*.json')
+    print(f"Searching for {image_ext} files...")
+    file_list = glob.glob(f'**/*{image_ext}')
 
     image_paths = []
 
-    for json_path in tqdm(file_list):
+    for image_path in tqdm(file_list):
         try:
+            json_path = os.path.splitext(image_path)[0]+".json"
             with open(json_path, "r") as f:
                 json_data = json.load(f)
-            image_path = os.path.splitext(json_path)[0]+image_ext
-            if json_data.get("aesthetic-shadow-v2", None) is None and os.path.exists(image_path):
+            if not json_data.get("aesthetic-shadow-v2", "") and os.path.exists(image_path):
                 image_paths.append(image_path)
         except Exception as e:
             print(f"ERROR: {json_path} MESSAGE: {e}")
