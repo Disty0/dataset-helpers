@@ -125,7 +125,7 @@ if __name__ == '__main__':
             json_path = os.path.splitext(image_path)[0]+".json"
             with open(json_path, "r") as f:
                 json_data = json.load(f)
-            if not json_data.get("aesthetic-shadow-v2", "") and os.path.exists(image_path):
+            if not json_data.get("aesthetic-shadow-v2", ""):
                 image_paths.append(image_path)
         except Exception as e:
             print(f"ERROR: {json_path} MESSAGE: {e}")
