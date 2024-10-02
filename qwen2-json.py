@@ -411,7 +411,7 @@ if __name__ == '__main__':
 
     batches = []
     current_batch = []
-    for file in image_path:
+    for file in image_paths:
         current_batch.append(file)
         if len(current_batch) >= batch_size:
             batches.append(current_batch)
