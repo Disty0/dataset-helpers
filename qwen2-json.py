@@ -336,7 +336,8 @@ class SaveCaptionBackend():
                 generated_ids, image_paths = self.save_queue.get()
                 generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=True)
                 for i in range(len(image_paths)):
-                    generated_text[i] = generated_text[i].replace("Describe this anime image in detail.", "").replace("Describe the anime style, anime style and the quality of this anime image as well.", "").replace("Describe nudity, sex, sexual intercourse, sex", "")
+                    generated_text[i] = generated_text[i].replace("Describe the art style, anime style and the quality of this anime image as well.", "").replace("Describe the anime style, anime style and the quality of this anime image as well.", "").replace("Describe nudity, sex, sexual intercourse, sex", "").replace("Describe nudity, sex", "").replace("Describe this anime image in detail.", "").replace("Describe this anime image in", "").replace("Describe this anime image", "").replace("Describe this image.", "").replace("Describe this image", "")
+                    generated_text[i] = generated_text[i].removeprefix("This anime image is ").removeprefix("This image is ").removeprefix("This is ")
                     self.save_to_file(generated_text[i], os.path.splitext(image_paths[i])[0]+".json")
             else:
                 time.sleep(0.1)
@@ -393,6 +394,13 @@ if __name__ == '__main__':
     if "xpu" in device:
         model = ipex_llm.optimize_model(model, low_bit="sym_int8")
         model = model.to(device)
+    else:
+        #torch.cuda.tunable.enable(val=True)
+        #torch.set_float32_matmul_precision('high')
+        torch.compiler.cudagraph_mark_step_begin()
+        model.visual = torch.compile(model.visual, backend="inductor")
+        torch.compiler.cudagraph_mark_step_begin()
+        model.model = torch.compile(model.model, backend="inductor")
 
 
     print(f"Searching for {image_ext} files...")
@@ -436,21 +444,22 @@ if __name__ == '__main__':
         del save_backend
     atexit.register(exit_handler, image_backend, save_backend)
 
-    with torch.no_grad():
+    with torch.inference_mode():
         for _ in tqdm(range(epoch_len)):
             try:
                 inputs, image_paths, copyright_tags = image_backend.get_images()
                 inputs = inputs.to(device)
                 input_ids_len = inputs["input_ids"].shape[-1]
-                output_ids = model.generate(
-                    **inputs,
-                    max_new_tokens=512,
-                    use_cache=True,
-                    do_sample=True,
-                    temperature=0.7,
-                    top_k=50,
-                    logits_processor=[logits_processor],
-                )
+                with torch.autocast(device_type=torch.device(device).type, dtype=dtype):
+                    output_ids = model.generate(
+                        **inputs,
+                        max_new_tokens=512,
+                        use_cache=True,
+                        do_sample=True,
+                        temperature=0.7,
+                        top_k=50,
+                        logits_processor=[logits_processor],
+                    )
                 generated_ids = [
                     output_ids[len(input_ids) :]
                     for input_ids, output_ids in zip(inputs.input_ids, output_ids)
@@ -462,7 +471,7 @@ if __name__ == '__main__':
                 error_file.write(f"ERROR: {image_paths} MESSAGE: {e} \n")
                 error_file.close()
             steps_after_gc = steps_after_gc + 1
-            if steps_after_gc == 0 or steps_after_gc >= 256 if "xpu" not in device else 1:
+            if steps_after_gc == 0 or steps_after_gc >= 16 if "xpu" not in device else 1:
                 if "cpu" not in device:
                     getattr(torch, torch.device(device).type).synchronize()
                     getattr(torch, torch.device(device).type).empty_cache()
