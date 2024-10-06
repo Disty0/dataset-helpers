@@ -299,6 +299,12 @@ class ImageBackend():
                 line = txt_file.readlines()[0].replace("\n", "")
             if line:
                 prompt += " These are the tags for this anime image, you can use them for guidence: " + line
+            if "character " in line or "from " in line:
+                for tag in line.split(", "):
+                    if "character " in tag or "from " in tag:
+                        copyright_tags += tag + ", "
+                if copyright_tags:
+                    copyright_tags = copyright_tags[:-2]
         conversation = [
             {
                 "role": "user",
