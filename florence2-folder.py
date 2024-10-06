@@ -265,12 +265,19 @@ class ImageBackend():
 
 
     def load_from_file(self, image_path):
-        base_prompt = "Describe this anime image. Describe the overall art style and the quality of this anime image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions, intimacy, vulnerability and sensuality as well. Pretend that anime and cartoon is the reality. If you are not sure about something, then don't mention it."
-        json_path = os.path.splitext(image_path)[0]+".json"
+        prompt = "Describe this anime image. Describe the overall art style and the quality of this anime image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions, intimacy, vulnerability and sensuality as well. Pretend that anime and cartoon is the reality. If you are not sure about something, then don't mention it."
+        base_path = os.path.splitext(image_path)[0]
+        json_path = base_path + ".json"
+        txt_path = base_path + ".txt"
         if os.path.exists(json_path):
-            prompt = f"{base_prompt} These are the tags for the anime image, you can use them for guidence: {get_tags_from_json(json_path)}"
-        else:
-            prompt = base_prompt
+            booru_tags = get_tags_from_json(json_path)
+            if booru_tags:
+                prompt += " These are the tags for the anime image, you can use them for guidence: " + booru_tags
+        elif os.path.exists(txt_path):
+            with open(txt_path, "r") as txt_file:
+                line = txt_file.readlines()[0].replace("\n", "")
+            if line:
+                prompt += " These are the tags for the anime image, you can use them for guidence: " + line
         image = Image.open(image_path).convert("RGBA")
         background = Image.new('RGBA', image.size, (255, 255, 255))
         image = Image.alpha_composite(background, image).convert("RGB")

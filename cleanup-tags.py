@@ -53,7 +53,7 @@ def write_tag(file_name):
     caption_file_2.close()
 
 print("Searching for TXT files...")
-file_list = glob.glob('./**/*.txt')
+file_list = glob.glob('**/*.txt')
 
 
 for txt_path in tqdm(file_list):

@@ -290,7 +290,8 @@ class ImageBackend():
             booru_tags, copyright_tags = get_tags_from_json(json_path)
             if copyright_tags:
                 prompt += " These are the character, series and artist names for this anime image, use them: " + copyright_tags + "."
-            prompt += " These are the tags for this anime image, you can use them for guidence: " + booru_tags
+            if booru_tags:
+                prompt += " These are the tags for this anime image, you can use them for guidence: " + booru_tags
         conversation = [
             {
                 "role": "user",
@@ -336,7 +337,7 @@ class SaveCaptionBackend():
                 generated_ids, image_paths = self.save_queue.get()
                 generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=True)
                 for i in range(len(image_paths)):
-                    generated_text[i] = generated_text[i].replace("Describe the art style, anime style and the quality of this anime image as well.", "").replace("Describe the anime style, anime style and the quality of this anime image as well.", "").replace("Describe nudity, sex, sexual intercourse, sex", "").replace("Describe nudity, sex", "").replace("Describe this anime image in detail.", "").replace("Describe this anime image in", "").replace("Describe this anime image", "").replace("Describe this image.", "").replace("Describe this image", "")
+                    generated_text[i] = generated_text[i].replace("Describe the art style, anime style and the quality of this anime image as well.", "").replace("Describe the anime style, anime style and the quality of this anime image as well.", "").replace("Describe nudity, sex, sexual intercourse, sex", "").replace("Describe nudity, sex", "").replace("Describe this anime image in detail.", "").replace("Describe this anime image in", "").replace("Describe this anime image", "").replace("Describe this image.", "").replace("Describe this image", "").replace("Describe the image.", "")
                     generated_text[i] = generated_text[i].removeprefix("This anime image is ").removeprefix("This image is ").removeprefix("This is ")
                     self.save_to_file(generated_text[i], os.path.splitext(image_paths[i])[0]+".json")
             else:

@@ -185,6 +185,8 @@ def get_aesthetic_tag(score):
 def get_tags_from_json(json_path):
     with open(json_path, "r") as json_file:
         json_data = json.load(json_file)
+    if not json_data.get("florence-2-base-promptgen-v1-5", ""):
+        return ""
     line = f"year {json_data['created_at'][:4]}"
     for tag in json_data["tag_string_general"].split(" "):
         if tag:
@@ -271,12 +273,12 @@ class ImageBackend():
         #base_prompt = "Describe this image. Describe the overall art style and the quality of this image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions, intimacy, vulnerability and sensuality as well."
         #base_prompt = "Describe this image. Describe the overall art style and the quality of this image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions, intimacy, vulnerability and sensuality as well. Pretend that anime and cartoon is the reality."
         #base_prompt = "Describe this image. Describe the overall art style and the quality of this anime image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions, intimacy, vulnerability and sensuality as well. Pretend that anime and cartoon is the reality."
-        base_prompt = "Describe this anime image. Describe the overall art style and the quality of this anime image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions, intimacy, vulnerability and sensuality as well. Pretend that anime and cartoon is the reality. If you are not sure about something, then don't mention it."
+        prompt = "Describe this anime image. Describe the overall art style and the quality of this anime image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions, intimacy, vulnerability and sensuality as well. Pretend that anime and cartoon is the reality. If you are not sure about something, then don't mention it."
         json_path = os.path.splitext(image_path)[0]+".json"
-        if os.path.exists(json_path) and not json_data.get("florence-2-base-promptgen-v1-5", ""):
-            prompt = f"{base_prompt} These are the tags for the anime image, you can use them for guidence: {get_tags_from_json(json_path)}"
-        else:
-            prompt = base_prompt
+        if os.path.exists(json_path):
+            booru_tags = get_tags_from_json(json_path)
+            if booru_tags:
+                prompt += " These are the tags for the anime image, you can use them for guidence: " + booru_tags
         image = Image.open(image_path).convert("RGBA")
         background = Image.new('RGBA', image.size, (255, 255, 255))
         image = Image.alpha_composite(background, image).convert("RGB")

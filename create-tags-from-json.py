@@ -205,6 +205,7 @@ class SaveTagBackend():
 
 
     def save_to_file(self, data, path):
+        #caption_file = open(os.path.join("/mnt/DataSSD/AI/anime_image_dataset/dataset/danbooru/danbooru-tags", path), "w")
         caption_file = open(path, "w")
         caption_file.write(data)
         caption_file.close()
