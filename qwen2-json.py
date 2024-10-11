@@ -13,20 +13,23 @@ try:
     import ipex_llm
 except Exception:
     pass
-from PIL import Image
 from queue import Queue
 from transformers import Qwen2VLForConditionalGeneration, AutoProcessor, LogitsProcessor
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 
 batch_size = 1
-image_ext = ".webp"
+image_ext = ".jxl"
 max_image_size = 1048576 # 1024x1024
 model_id = "Ertugrul/Qwen2-VL-7B-Captioner-Relaxed"
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
 dtype = torch.bfloat16
 use_flash_atten = "cuda" in device and torch.version.cuda
 steps_after_gc = -1
+
+if image_ext == ".jxl":
+    import pillow_jxl # noqa: F401
+from PIL import Image # noqa: E402
 
 
 if not use_flash_atten:
@@ -172,10 +175,13 @@ def get_quality_tag_from_wd(score):
 
 
 def get_quality_tag(json_data):
-    quality_score = get_quality_score_from_rating(json_data.get("fav_count", json_data["score"]), json_data["rating"])
-    if int(json_data["id"]) > 7000000:
-        wd_quality_score = get_quality_tag_from_wd(json_data.get("wd-aes-b32-v0", 0))
-        quality_score = max(quality_score, wd_quality_score)
+    if json_data.get("score", None) is None:
+        quality_score = get_quality_tag_from_wd(json_data.get("wd-aes-b32-v0", 0))
+    else:
+        quality_score = get_quality_score_from_rating(json_data.get("fav_count", json_data["score"]), json_data["rating"])
+        if int(json_data["id"]) > 7000000:
+            wd_quality_score = get_quality_tag_from_wd(json_data.get("wd-aes-b32-v0", 0))
+            quality_score = max(quality_score, wd_quality_score)
     return quality_score_to_tag[quality_score]
 
 

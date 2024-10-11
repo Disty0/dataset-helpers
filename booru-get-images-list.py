@@ -7,12 +7,17 @@ import time
 import argparse
 import pybooru
 import requests
-from PIL import Image
 from tqdm import tqdm
 
-Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
+image_ext = ".jxl"
+quality = 97
 pybooru.resources.SITE_LIST["shima"] = {"url": "https://shima.donmai.us/"}
 client = pybooru.Danbooru('shima')
+
+if image_ext == ".jxl":
+    import pillow_jxl # noqa: F401
+from PIL import Image # noqa: E402
+Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 parser = argparse.ArgumentParser(description='Get images from danbooru')
 parser.add_argument('list', type=str)
@@ -78,7 +83,7 @@ id_list = new_id_list
 
 for id in tqdm(id_list):
     folder = str(int(id / 10000))
-    image_path = os.path.join(folder, f"{id}.webp")
+    image_path = os.path.join(folder, str(id)+image_ext)
 
     if not (os.path.exists(image_path) and os.path.getsize(image_path) != 0):
         json_path = os.path.join(folder, f"{id}.json")
@@ -123,12 +128,8 @@ for id in tqdm(id_list):
                     new_width = int(width/scale)
                     new_height = int(height/scale)
                     image = image.resize((new_width, new_height), Image.LANCZOS)
-                image.save(image_path, "WEBP", quality=99)
+                image.save(image_path, quality=quality)
                 image.close()
-                os.makedirs("out", exist_ok=True)
-                out_file = open("out/out_list.txt", 'a')
-                out_file.write(f"{folder}/{id}\n")
-                out_file.close()
             except Exception as e:
                 str_e = str(e)
                 if str_e != "'file_url'":

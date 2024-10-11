@@ -15,20 +15,23 @@ try:
     transformers.dynamic_module_utils.get_class_from_dynamic_module = backup_get_class_from_dynamic_module
 except Exception:
     pass
-from PIL import Image
 from queue import Queue
 from transformers import AutoModelForCausalLM, AutoProcessor
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 
 batch_size = 8
-image_ext = ".webp"
+image_ext = ".jxl"
 model_id = "MiaoshouAI/Florence-2-base-PromptGen-v1.5"
 revision = "c06a5f02cc6071a5d65ee5d294cf3732d3097540"
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
 dtype = torch.float16 if "cuda" in device else torch.bfloat16 if "xpu" in device else torch.float32
 use_flash_atten = "cuda" in device
 steps_after_gc = -1
+
+if image_ext == ".jxl":
+    import pillow_jxl # noqa: F401
+from PIL import Image # noqa: E402
 
 
 if not use_flash_atten:

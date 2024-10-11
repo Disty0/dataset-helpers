@@ -10,15 +10,18 @@ import torch
 #    import intel_extension_for_pytorch as ipex # noqa: F401
 #except Exception:
 #    pass
-from PIL import Image
 from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
 from transformers import pipeline
 from tqdm import tqdm
 
-image_ext = ".webp"
+image_ext = ".jxl"
 device = "cuda" if torch.cuda.is_available() else "cpu" # else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available()
 steps_after_gc = -1
+
+if image_ext == ".jxl":
+    import pillow_jxl # noqa: F401
+from PIL import Image # noqa: E402
 
 
 def remove_old_tag(text):

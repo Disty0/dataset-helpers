@@ -12,18 +12,21 @@ try:
 except Exception:
     pass
 from transformers import CLIPModel, CLIPProcessor
-from PIL import Image
 from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 
 batch_size = 1 # more batch size reduces the accuracy a lot
-image_ext = ".webp"
+image_ext = ".jxl"
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
 aesthetic_path = '/mnt/DataSSD/AI/models/aes-B32-v0.pth'
 clip_name = 'openai/clip-vit-base-patch32'
 dtype = torch.float32 # outputs nonsense with 16 bit
 steps_after_gc = -1
+
+if image_ext == ".jxl":
+    import pillow_jxl # noqa: F401
+from PIL import Image # noqa: E402
 
 
 # binary classifier that consumes CLIP embeddings
