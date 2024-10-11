@@ -137,15 +137,15 @@ def get_aesthetic_tag(score):
     if score > 0.925:
         return "very aesthetic"
     elif score > 0.90:
-        return "aesthetic"
+        return "highly aesthetic"
     elif score > 0.875:
         return "slightly aesthetic"
     elif score > 0.825:
-        return "slightly displeasing"
+        return "moderate aesthetic"
     elif score > 0.725:
-        return "displeasing"
+        return "not aesthetic"
     else:
-        return "very displeasing"
+        return "bad aesthetic"
 
 
 def get_tags_from_json(json_path):
