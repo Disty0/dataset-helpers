@@ -8,19 +8,16 @@ import time
 import atexit
 import huggingface_hub
 import numpy as np
-import pandas as pd
 from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 import onnxruntime as ort
 
-batch_size = 24
+batch_size = 32
 image_ext = ".jxl"
-general_thresh = 0.35
-character_thresh = 0.5
-model_repo = "SmilingWolf/wd-swinv2-tagger-v3"
-MODEL_FILENAME = "model.onnx"
-LABEL_FILENAME = "selected_tags.csv"
+model_repo = "deepghs/anime_style_ages"
+MODEL_FILENAME = "caformer_s36_v0/model.onnx"
+LABEL_FILENAME = "caformer_s36_v0/meta.json"
 steps_after_gc = -1
 
 if image_ext == ".jxl":
@@ -28,20 +25,11 @@ if image_ext == ".jxl":
 from PIL import Image # noqa: E402
 
 
-rating_map = {
-    "general": "g",
-    "sensitive": "s",
-    "questionable": "q",
-    "explicit": "e",
-}
-
-
 class ImageBackend():
-    def __init__(self, batches, model_target_size, load_queue_lenght=256, max_load_workers=4):
+    def __init__(self, batches, load_queue_lenght=256, max_load_workers=4):
         self.load_queue_lenght = 0
         self.keep_loading = True
         self.batches = Queue()
-        self.model_target_size = model_target_size
         for batch in batches:
             if isinstance(batch, str):
                 batch = [batch]
@@ -69,7 +57,7 @@ class ImageBackend():
                 for batch in batches:
                     image = self.load_from_file(batch)
                     images.append(image)
-                images = np.array(images)
+                images = np.array(images).astype(np.float32)
                 self.load_queue.put([images, batches])
                 self.load_queue_lenght += 1
             else:
@@ -82,37 +70,19 @@ class ImageBackend():
         image = Image.open(image_path).convert("RGBA")
         background = Image.new('RGBA', image.size, (255, 255, 255))
         image = Image.alpha_composite(background, image).convert("RGB")
-        # Pad image to square
-        image_shape = image.size
-        max_dim = max(image_shape)
-        pad_left = (max_dim - image_shape[0]) // 2
-        pad_top = (max_dim - image_shape[1]) // 2
-
-        padded_image = Image.new("RGB", (max_dim, max_dim), (255, 255, 255))
-        padded_image.paste(image, (pad_left, pad_top))
-
-        # Resize
-        if max_dim != self.model_target_size:
-            padded_image = padded_image.resize(
-                (self.model_target_size, self.model_target_size),
-                Image.BICUBIC,
-            )
-
-        # Convert to numpy array
-        image_array = np.asarray(padded_image, dtype=np.float32)
-
-        # Convert PIL-native RGB to BGR
-        image_array = image_array[:, :, ::-1]
-
+        image = image.resize((384, 384), Image.BICUBIC)
+        image_array = np.asarray(image)
+        image_array = np.transpose(image_array, (2, 0, 1))
+        image_array = (image_array / 255.0).astype(np.float32)
+        mean = np.asarray([0.5]).reshape((-1, 1, 1))
+        std = np.asarray([0.5]).reshape((-1, 1, 1))
+        image_array = (image_array - mean) / std
         return image_array
 
 
 class SaveQualityBackend():
-    def __init__(self, tag_names, rating_indexes, character_indexes, general_indexes, max_save_workers=2):
-        self.tag_names = tag_names
-        self.rating_indexes = rating_indexes
-        self.character_indexes = character_indexes
-        self.general_indexes = general_indexes
+    def __init__(self, model_config, max_save_workers=2):
+        self.model_config = model_config
         self.keep_saving = True
         self.save_queue = Queue()
         self.save_thread = ThreadPoolExecutor(max_workers=max_save_workers)
@@ -137,63 +107,22 @@ class SaveQualityBackend():
 
 
     def save_to_file(self, data, path):
-        rating, character_res, sorted_general_strings = data[0], data[1], data[2]
-        json_data = {}
-        json_data["rating"] = rating
-        json_data["tag_string_character"] = character_res
-        json_data["tag_string_general"] = sorted_general_strings
-        #json_data["special_tags"] = "visual_novel_cg"
-        #txt_path = os.path.splitext(path)[0]+".txt"
-        #with open(txt_path, "r") as txt_file:
-        #    copyright_tag = txt_file.readlines()[0].split(", ", maxsplit=4)[3]
-        #    if copyright_tag.startswith("from "):
-        #        json_data["tag_string_copyright"] = copyright_tag.removeprefix("from ").replace(" ", "_")
-        if not json_data.get("tag_string_copyright", ""):
-            json_data["tag_string_copyright"] = ""
-        if not json_data.get("tag_string_artist", ""):
-            json_data["tag_string_artist"] = ""
-        if not json_data.get("tag_string_meta", ""):
-            json_data["tag_string_meta"] = ""
-        if not json_data.get("created_at", ""):
-            json_data["created_at"] = "none"
+        with open(path, "r") as json_file:
+            json_data = json.load(json_file)
+        json_data["style_age"] = data
+        if json_data.get("created_at", "none") == "none":
+            json_data["created_at"] = data
         with open(path, "w") as f:
             json.dump(json_data, f)
 
 
     def get_tags(self, predictions):
-        labels = list(zip(self.tag_names, predictions.astype(float)))
-
-        # First 4 labels are actually ratings: pick one with argmax
-        ratings_names = [labels[i] for i in self.rating_indexes]
-        rating = dict(ratings_names)
-        rating = max(rating, key=rating.get)
-        rating = rating_map[rating]
-
-        # Then we have general tags: pick any where prediction confidence > threshold
-        general_names = [labels[i] for i in self.general_indexes]
-
-        general_res = [x for x in general_names if x[1] > general_thresh]
-        general_res = dict(general_res)
-
-        # Everything else is characters: pick any where prediction confidence > threshold
-        character_names = [labels[i] for i in self.character_indexes]
-
-        character_res = [x for x in character_names if x[1] > character_thresh]
-        character_res = dict(character_res)
-
-        sorted_general_strings = sorted(
-            general_res.items(),
-            key=lambda x: x[1],
-            reverse=True,
-        )
-        sorted_general_strings = [x[0] for x in sorted_general_strings]
-        sorted_general_strings = " ".join(sorted_general_strings)
-
-        return [rating, character_res, sorted_general_strings]
+        values = dict(zip(self.model_config["labels"], map(lambda x: x.item(), predictions)))
+        return max(values, key=values.get).replace("-", "")
 
 
 if __name__ == '__main__':
-    csv_path = huggingface_hub.hf_hub_download(
+    model_config_path = huggingface_hub.hf_hub_download(
         model_repo,
         LABEL_FILENAME,
     )
@@ -202,12 +131,8 @@ if __name__ == '__main__':
         MODEL_FILENAME,
     )
 
-    dataframe = pd.read_csv(csv_path)
-    name_series = dataframe["name"]
-    tag_names = name_series.tolist()
-    rating_indexes = list(np.where(dataframe["category"] == 9)[0])
-    general_indexes = list(np.where(dataframe["category"] == 0)[0])
-    character_indexes = list(np.where(dataframe["category"] == 4)[0])
+    with open(model_config_path, "r") as model_config_file:
+        model_config = json.load(model_config_file)
 
     if "OpenVINOExecutionProvider" in ort.get_available_providers():
         # requires provider options for gpu support
@@ -226,11 +151,6 @@ if __name__ == '__main__':
                 ["CPUExecutionProvider"]
             ),
         )
-    _, height, width, _ = model.get_inputs()[0].shape
-    model_target_size = height
-
-    input_name = model.get_inputs()[0].name
-    label_name = model.get_outputs()[0].name
 
 
     print(f"Searching for {image_ext} files...")
@@ -240,7 +160,9 @@ if __name__ == '__main__':
     for image_path in tqdm(file_list):
         try:
             json_path = os.path.splitext(image_path)[0]+".json"
-            if not os.path.exists(json_path):
+            with open(json_path, "r") as json_file:
+                json_data = json.load(json_file)
+            if not json_data.get("style_age", ""):
                 image_paths.append(image_path)
         except Exception as e:
             print(f"ERROR: {json_path} MESSAGE: {e}")
@@ -256,8 +178,8 @@ if __name__ == '__main__':
         batches.append(current_batch)
 
     epoch_len = len(batches)
-    image_backend = ImageBackend(batches, model_target_size)
-    save_backend = SaveQualityBackend(tag_names, rating_indexes, character_indexes, general_indexes)
+    image_backend = ImageBackend(batches)
+    save_backend = SaveQualityBackend(model_config)
 
     def exit_handler(image_backend, save_backend):
         image_backend.keep_loading = False
@@ -275,7 +197,7 @@ if __name__ == '__main__':
     for _ in tqdm(range(epoch_len)):
         try:
             images, image_paths = image_backend.get_images()
-            predictions = model.run([label_name], {input_name: images})[0]
+            predictions = model.run(['output'], {'input': images})[0]
             save_backend.save(predictions, image_paths)
         except Exception as e:
             os.makedirs("errors", exist_ok=True)
