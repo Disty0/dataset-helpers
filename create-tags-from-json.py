@@ -11,7 +11,8 @@ from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
 
 
-image_ext = ".webp"
+image_ext = ".jxl"
+out_path = ""
 steps_after_gc = 0
 
 
@@ -154,6 +155,10 @@ def get_tags_from_json(json_path):
     line = get_aesthetic_tag(json_data['aesthetic-shadow-v2'])
     line += f", {get_quality_tag(json_data)}"
     line += f", year {json_data['created_at'][:4]}"
+    if json_data.get("special_tags", ""):
+        for special_tag in json_data["special_tags"].split(" "):
+            if special_tag:
+                line += f", {special_tag.replace('_', ' ')}"
     for artist in json_data["tag_string_artist"].split(" "):
         if artist:
             line += f", art by {artist.replace('_', ' ')}"
@@ -205,8 +210,11 @@ class SaveTagBackend():
 
 
     def save_to_file(self, data, path):
-        #caption_file = open(os.path.join("/mnt/DataSSD/AI/anime_image_dataset/dataset/danbooru/danbooru-tags", path), "w")
-        caption_file = open(path, "w")
+        if out_path:
+            os.makedirs(os.path.join(out_path, os.path.dirname(path)), exist_ok=True)
+            caption_file = open(os.path.join(out_path, path), "w")
+        else:
+            caption_file = open(path, "w")
         caption_file.write(data)
         caption_file.close()
 
