@@ -214,7 +214,7 @@ def get_tags_from_json(json_path):
         if artist:
             copyright_tags += f", art by {artist.replace('_', ' ')}"
     if copyright_tags:
-        copyright_tags = copyright_tags[2:]
+        copyright_tags = copyright_tags[2:].lower()
     line = f"year {json_data['created_at'][:4]}"
     if json_data.get("special_tags", ""):
         for special_tag in json_data["special_tags"].split(" "):
@@ -378,7 +378,7 @@ class UncensorQwen2(LogitsProcessor):
             for i in range(scores.shape[0]):
                 max_id = torch.argmax(scores)
                 if (copyright_tags and (max_id == 151645 or max_id == 151655) and generation_lenght < 384
-                and processor.decode(input_ids[i][-25:]).lower().rsplit("\n", maxsplit=1)[-1].rsplit(" ", maxsplit=1)[-1] in copyright_tags):
+                and processor.decode(input_ids[i][-25:]).lower().rsplit("\n", maxsplit=1)[-1].rsplit(" ", maxsplit=1)[-1].replace("\"", "").replace(",", "") in copyright_tags):
                         scores[i][151645] = 0
                         scores[i][151655] = 0
                 elif max_id == 151655:
