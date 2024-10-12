@@ -112,7 +112,7 @@ for id in tqdm(range(args.start, args.end)):
         and not any([bool(tag in image_data["tag_string_meta"]) for tag in meta_blacklist])):
             try:
                 image = Image.open(requests.get(image_data["file_url"], stream=True).raw).convert('RGBA')
-                if image_size > 4194304: # 2048x2048
+                if image_size > 4194304 and not (image_ext == ".jxl" and image_data["file_ext"] in {"jpg", "jpeg"}): # 2048x2048 # jpeg xl compresses jpg images really well
                     scale = math.sqrt(image_size / 4194304)
                     new_width = int(width/scale)
                     new_height = int(height/scale)
