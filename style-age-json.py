@@ -16,8 +16,8 @@ import onnxruntime as ort
 batch_size = 32
 image_ext = ".jxl"
 model_repo = "deepghs/anime_style_ages"
-MODEL_FILENAME = "caformer_s36_v0/model.onnx"
-LABEL_FILENAME = "caformer_s36_v0/meta.json"
+MODEL_FILENAME = "mobilenetv3_v0_dist/model.onnx"
+LABEL_FILENAME = "mobilenetv3_v0_dist/meta.json"
 steps_after_gc = -1
 
 if image_ext == ".jxl":
@@ -136,11 +136,10 @@ if __name__ == '__main__':
 
     if "OpenVINOExecutionProvider" in ort.get_available_providers():
         # requires provider options for gpu support
-        # fp16 causes nonsense outputs
         model = ort.InferenceSession(
             model_path,
             providers=(["OpenVINOExecutionProvider"]),
-            provider_options=[{'device_type' : "GPU", "precision": "FP32"}],
+            provider_options=[{'device_type' : "GPU", "precision": "FP16"}],
         )
     else:
         model = ort.InferenceSession(

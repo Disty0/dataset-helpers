@@ -216,6 +216,10 @@ def get_tags_from_json(json_path):
     if copyright_tags:
         copyright_tags = copyright_tags[2:]
     line = f"year {json_data['created_at'][:4]}"
+    if json_data.get("special_tags", ""):
+        for special_tag in json_data["special_tags"].split(" "):
+            if special_tag:
+                line += f", {special_tag.replace('_', ' ')}"
     for tag in json_data["tag_string_general"].split(" "):
         if tag:
             line += f", {tag.replace('_', ' ') if len(tag) > 3 else tag}"
