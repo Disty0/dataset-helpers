@@ -90,7 +90,7 @@ class SaveAestheticBackend():
                 data = self.save_queue.get()
                 self.save_to_file(data[0], data[1])
             else:
-                time.sleep(0.1)
+                time.sleep(0.25)
         print("Stopping the save backend threads")
         return
 

@@ -351,7 +351,7 @@ class SaveCaptionBackend():
                     generated_text[i] = generated_text[i].removeprefix("This anime image is ").removeprefix("This image is ").removeprefix("This is ")
                     self.save_to_file(generated_text[i], os.path.splitext(image_paths[i])[0]+".json")
             else:
-                time.sleep(0.1)
+                time.sleep(0.25)
         print("Stopping the save backend threads")
         return
 

@@ -120,7 +120,7 @@ class SaveQualityBackend():
                 for i in range(len(image_paths)):
                     self.save_to_file(predictions[i].item(), os.path.splitext(image_paths[i])[0]+".json")
             else:
-                time.sleep(0.1)
+                time.sleep(0.25)
         print("Stopping the save backend threads")
         return
 

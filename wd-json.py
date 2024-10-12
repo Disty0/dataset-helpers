@@ -62,7 +62,7 @@ class ImageBackend():
     def load_thread_func(self):
         while self.keep_loading:
             if self.load_queue_lenght >= self.max_load_queue_lenght:
-                time.sleep(0.1)
+                time.sleep(0.25)
             elif not self.batches.empty():
                 batches = self.batches.get()
                 images = []
@@ -131,7 +131,7 @@ class SaveQualityBackend():
                 for i in range(len(image_paths)):
                     self.save_to_file(self.get_tags(predictions[i]), os.path.splitext(image_paths[i])[0]+".json")
             else:
-                time.sleep(0.1)
+                time.sleep(0.25)
         print("Stopping the save backend threads")
         return
 
