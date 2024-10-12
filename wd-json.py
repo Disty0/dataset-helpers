@@ -137,10 +137,10 @@ class SaveQualityBackend():
 
 
     def save_to_file(self, data, path):
-        rating, character_res, sorted_general_strings = data[0], data[1], data[2]
+        rating, character_strings, sorted_general_strings = data[0], data[1], data[2]
         json_data = {}
         json_data["rating"] = rating
-        json_data["tag_string_character"] = character_res
+        json_data["tag_string_character"] = character_strings
         json_data["tag_string_general"] = sorted_general_strings
         #json_data["special_tags"] = "visual_novel_cg"
         #txt_path = os.path.splitext(path)[0]+".txt"
@@ -180,6 +180,13 @@ class SaveQualityBackend():
 
         character_res = [x for x in character_names if x[1] > character_thresh]
         character_res = dict(character_res)
+        character_strings = ""
+        if character_res:
+            for character in character_res.keys():
+                if character:
+                    character_strings += character + " "
+        if character_strings:
+            character_strings = character_strings[:-1]
 
         sorted_general_strings = sorted(
             general_res.items(),
@@ -189,7 +196,7 @@ class SaveQualityBackend():
         sorted_general_strings = [x[0] for x in sorted_general_strings]
         sorted_general_strings = " ".join(sorted_general_strings)
 
-        return [rating, character_res, sorted_general_strings]
+        return [rating, character_strings, sorted_general_strings]
 
 
 if __name__ == '__main__':
