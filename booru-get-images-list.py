@@ -10,7 +10,6 @@ import requests
 from tqdm import tqdm
 
 image_ext = ".jxl"
-quality = 97
 pybooru.resources.SITE_LIST["shima"] = {"url": "https://shima.donmai.us/"}
 client = pybooru.Danbooru('shima')
 
@@ -87,6 +86,7 @@ for id in tqdm(id_list):
 
     if not (os.path.exists(image_path) and os.path.getsize(image_path) != 0):
         json_path = os.path.join(folder, f"{id}.json")
+        jpg_path = None
     
         if os.path.exists(json_path) and os.path.getsize(json_path) != 0:
             with open(json_path, "r") as f:
@@ -120,17 +120,26 @@ for id in tqdm(id_list):
         and not any([bool(tag in general_tags) for tag in general_blacklist])
         and not any([bool(tag in image_data["tag_string_meta"]) for tag in meta_blacklist])):
             try:
-                #with open(os.path.join(folder, f"{id}.bin"), "wb") as f:
-                #    f.write(requests.get(image_data["file_url"], stream=True).raw.read())
-                image = Image.open(requests.get(image_data["file_url"], stream=True).raw).convert('RGBA')
-                if image_size > 4194304 and not (image_ext == ".jxl" and image_data["file_ext"] in {"jpg", "jpeg"}): # 2048x2048 # jpeg xl compresses jpg images really well
-                    scale = math.sqrt(image_size / 4194304)
-                    new_width = int(width/scale)
-                    new_height = int(height/scale)
-                    image = image.resize((new_width, new_height), Image.LANCZOS)
-                image.save(image_path, quality=quality)
+                if image_ext == ".jxl" and image_data["file_ext"] in {"jpg", "jpeg"}:
+                    jpg_path = os.path.join(folder, str(id)+".jpg")
+                    image_data = requests.get(image_data["file_url"], stream=True).raw.read()
+                    with open(jpg_path, "wb") as jpg_file:
+                        jpg_file.write(image_data)
+                    image = Image.open(jpg_path)
+                else:
+                    image = Image.open(requests.get(image_data["file_url"], stream=True).raw).convert("RGBA")
+                    if image_size > 4194304: # 2048x2048
+                        scale = math.sqrt(image_size / 4194304)
+                        new_width = int(width/scale)
+                        new_height = int(height/scale)
+                        image = image.resize((new_width, new_height), Image.LANCZOS)
+                image.save(image_path, lossless=True)
                 image.close()
+                if jpg_path is not None and os.path.exists(jpg_path):
+                    os.remove(jpg_path)
             except Exception as e:
+                if jpg_path is not None and os.path.exists(jpg_path):
+                    os.remove(jpg_path)
                 str_e = str(e)
                 if str_e != "'file_url'":
                     os.makedirs("errors", exist_ok=True)
