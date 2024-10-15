@@ -23,7 +23,7 @@ image_ext = ".jxl"
 max_image_size = 1048576 # 1024x1024
 model_id = "Ertugrul/Qwen2-VL-7B-Captioner-Relaxed"
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
-dtype = torch.bfloat16
+dtype = torch.bfloat16 if "xpu" not in device else torch.float16
 use_flash_atten = "cuda" in device and torch.version.cuda
 steps_after_gc = -1
 
