@@ -103,6 +103,10 @@ class SaveAestheticBackend():
             json.dump(json_data, f)
 
 if __name__ == '__main__':
+    try:
+        torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(True)
+    except Exception:
+        pass
     pipe = pipeline("image-classification", model="shadowlilac/aesthetic-shadow-v2", device=device)
     pipe.model.eval()
     pipe.model.requires_grad_(False)

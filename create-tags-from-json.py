@@ -127,10 +127,13 @@ def get_quality_tag_from_wd(score):
 
 
 def get_quality_tag(json_data):
-    quality_score = get_quality_score_from_rating(json_data.get("fav_count", json_data["score"]), json_data["rating"])
-    if int(json_data["id"]) > 7000000:
-        wd_quality_score = get_quality_tag_from_wd(json_data.get("wd-aes-b32-v0", 0))
-        quality_score = max(quality_score, wd_quality_score)
+    if json_data.get("score", None) is not None:
+        quality_score = get_quality_score_from_rating(json_data.get("fav_count", json_data["score"]), json_data["rating"])
+        if int(json_data["id"]) > 7000000:
+            wd_quality_score = get_quality_tag_from_wd(json_data.get("wd-aes-b32-v0", 0))
+            quality_score = max(quality_score, wd_quality_score)
+    else:
+        quality_score = get_quality_tag_from_wd(json_data.get("wd-aes-b32-v0", 0))
     return quality_score_to_tag[quality_score]
 
 

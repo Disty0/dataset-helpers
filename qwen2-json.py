@@ -390,6 +390,10 @@ class UncensorQwen2(LogitsProcessor):
 
 
 if __name__ == '__main__':
+    try:
+        torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(True)
+    except Exception:
+        pass
     processor = AutoProcessor.from_pretrained(model_id)
     logits_processor = UncensorQwen2()
     model = Qwen2VLForConditionalGeneration.from_pretrained(

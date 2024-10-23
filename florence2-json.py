@@ -328,6 +328,10 @@ class SaveCaptionBackend():
 
 
 if __name__ == '__main__':
+    try:
+        torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(True)
+    except Exception:
+        pass
     processor = AutoProcessor.from_pretrained(model_id, revision=revision, trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained(
         model_id, revision=revision, trust_remote_code=True, torch_dtype=dtype,

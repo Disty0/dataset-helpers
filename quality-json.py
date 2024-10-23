@@ -134,6 +134,10 @@ class SaveQualityBackend():
 
 
 if __name__ == '__main__':
+    try:
+        torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(True)
+    except Exception:
+        pass
     clipprocessor = CLIPProcessor.from_pretrained(clip_name)
     clipmodel = CLIPModel.from_pretrained(clip_name).eval().to(device, dtype=dtype, memory_format=torch.channels_last)
     clipmodel.requires_grad_(False)
