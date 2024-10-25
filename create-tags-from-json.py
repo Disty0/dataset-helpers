@@ -86,8 +86,8 @@ quality_score_to_tag = {
     5: "high quality",
     4: "great quality",
     3: "normal quality",
-    2: "bad quality",
-    1: "low quality",
+    2: "low quality",
+    1: "bad quality",
     0: "worst quality",
 }
 
