@@ -52,6 +52,7 @@ general_blacklist = [
 ]
 
 meta_blacklist = [
+    "corrupted_file",
     "artifacts",
     "aliasing",
     "adversarial_noise",
@@ -120,7 +121,12 @@ for id in tqdm(id_list):
         and not any([bool(tag in general_tags) for tag in general_blacklist])
         and not any([bool(tag in image_data["tag_string_meta"]) for tag in meta_blacklist])):
             try:
-                if image_ext == ".jxl" and image_data["file_ext"] in {"jpg", "jpeg"}:
+                if False: # save raw files
+                    image_data = requests.get(image_data["file_url"], stream=True).raw.read()
+                    with open(os.path.join(folder, str(id)+".bin"), "wb") as jpg_file:
+                        jpg_file.write(image_data)
+                    continue
+                elif image_ext == ".jxl" and image_data["file_ext"] in {"jpg", "jpeg"}:
                     jpg_path = os.path.join(folder, str(id)+".jpg")
                     image_data = requests.get(image_data["file_url"], stream=True).raw.read()
                     with open(jpg_path, "wb") as jpg_file:

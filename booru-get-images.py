@@ -52,6 +52,7 @@ general_blacklist = [
 ]
 
 meta_blacklist = [
+    "corrupted_file",
     "artifacts",
     "aliasing",
     "adversarial_noise",
