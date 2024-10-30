@@ -26,6 +26,7 @@ steps_after_gc = -1
 if image_ext == ".jxl":
     import pillow_jxl # noqa: F401
 from PIL import Image # noqa: E402
+Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 
 rating_map = {
@@ -143,11 +144,6 @@ class SaveQualityBackend():
         json_data["tag_string_character"] = character_strings
         json_data["tag_string_general"] = sorted_general_strings
         #json_data["special_tags"] = "visual_novel_cg"
-        #txt_path = os.path.splitext(path)[0]+".txt"
-        #with open(txt_path, "r") as txt_file:
-        #    copyright_tag = txt_file.readlines()[0].split(", ", maxsplit=4)[3]
-        #    if copyright_tag.startswith("from "):
-        #        json_data["tag_string_copyright"] = copyright_tag.removeprefix("from ").replace(" ", "_")
         if not json_data.get("tag_string_copyright", ""):
             json_data["tag_string_copyright"] = ""
         if not json_data.get("tag_string_artist", ""):

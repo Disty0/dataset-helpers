@@ -30,6 +30,7 @@ steps_after_gc = -1
 if image_ext == ".jxl":
     import pillow_jxl # noqa: F401
 from PIL import Image # noqa: E402
+Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 
 if not use_flash_atten:

@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 image_ext = ".jxl"
+#out_path = "/mnt/DataSSD/AI/anime_image_dataset/dataset/danbooru/danbooru-wd"
 out_path = ""
 steps_after_gc = 0
 
