@@ -45,6 +45,72 @@ cleanup_caption_list = [
     [" influence influence", " influence"],
 ]
 
+
+def cleanup_word_repeats(caption):
+    replace_words = None
+    words = caption.split(" ")
+    for i in range(len(words)):
+        if words[-(2*i):-i] == words[-i:]:
+            replace_words = words[-i:]
+            break
+    if replace_words is None:
+        return caption, ""
+    else:
+        replace_string = " ".join(replace_words)
+        if replace_string:
+            while replace_string[0] == " ":
+                replace_string = replace_string[1:]
+            while replace_string[-1] == " ":
+                replace_string = replace_string[:-1]
+            while caption[-1] == " ":
+                caption = caption[:-1]
+            while caption.endswith(replace_string):
+                caption = caption.removesuffix(replace_string)
+                if caption:
+                    while caption[-1] == " ":
+                        caption = caption[:-1]
+        return caption, replace_string
+
+
+def cleanup_string_repeats(caption):
+    replace_string = None
+    for i in range(len(caption)):
+        if caption[-(2*i):-i] == caption[-i:]:
+            replace_string = caption[-i:]
+            break
+    if replace_string is None:
+        return caption, ""
+    else:
+        if len(caption.rsplit(replace_string, maxsplit=3)) == 4:
+            while caption.endswith(replace_string):
+                caption = caption.removesuffix(replace_string)
+            return caption, replace_string
+        else:
+            return caption, ""
+
+
+def cleanup_word_repeats_recursive(caption):
+    caption, replace_words = cleanup_word_repeats(caption)
+    if replace_words:
+        caption = cleanup_repeats_recursive(caption)
+        caption = caption + " " + replace_words
+        caption = cleanup_repeats_recursive(caption)
+    return caption
+
+
+def cleanup_repeats_recursive(caption):
+    caption = cleanup_word_repeats_recursive(caption)
+    caption, replace_string0 = cleanup_string_repeats(caption)
+    if replace_string0:
+        caption = caption + replace_string0
+    caption = cleanup_word_repeats_recursive(caption)
+    caption, replace_string1 = cleanup_string_repeats(caption)
+    if replace_string1:
+        caption = caption + replace_string1
+        caption = cleanup_repeats_recursive(caption)
+    return caption
+    
+
 def cleanup_whitespace(caption):
     while caption[0] == ",":
         caption = caption[1:]
@@ -62,6 +128,7 @@ def cleanup_whitespace(caption):
 
 
 def cleanup_caption(caption):
+    caption = cleanup_repeats_recursive(caption)
     caption = cleanup_whitespace(caption)
     for old_tag, new_tag in cleanup_caption_list:
         caption = caption.replace(old_tag, new_tag)
