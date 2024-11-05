@@ -167,7 +167,7 @@ def get_tags_from_json(json_path):
         if artist:
             line += f", art by {artist.replace('_', ' ')}"
     for cpr in json_data["tag_string_copyright"].split(" "):
-        if cpr:
+        if cpr and cpr != "original":
             line += f", from {cpr.replace('_', ' ')}"
     for char in json_data["tag_string_character"].split(" "):
         if char:
