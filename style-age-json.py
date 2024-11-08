@@ -27,7 +27,7 @@ Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 
 class ImageBackend():
-    def __init__(self, batches, load_queue_lenght=256, max_load_workers=4):
+    def __init__(self, batches, load_queue_lenght=256, max_load_workers=8):
         self.load_queue_lenght = 0
         self.keep_loading = True
         self.batches = Queue()
@@ -81,7 +81,7 @@ class ImageBackend():
         return image_array
 
 
-class SaveQualityBackend():
+class SaveTagBackend():
     def __init__(self, model_config, max_save_workers=2):
         self.model_config = model_config
         self.keep_saving = True
@@ -179,7 +179,7 @@ if __name__ == '__main__':
 
     epoch_len = len(batches)
     image_backend = ImageBackend(batches)
-    save_backend = SaveQualityBackend(model_config)
+    save_backend = SaveTagBackend(model_config)
 
     def exit_handler(image_backend, save_backend):
         image_backend.keep_loading = False

@@ -38,7 +38,7 @@ rating_map = {
 
 
 class ImageBackend():
-    def __init__(self, batches, model_target_size, load_queue_lenght=256, max_load_workers=4):
+    def __init__(self, batches, model_target_size, load_queue_lenght=256, max_load_workers=8):
         self.load_queue_lenght = 0
         self.keep_loading = True
         self.batches = Queue()
@@ -108,7 +108,7 @@ class ImageBackend():
         return image_array
 
 
-class SaveQualityBackend():
+class SaveTagBackend():
     def __init__(self, tag_names, rating_indexes, character_indexes, general_indexes, max_save_workers=2):
         self.tag_names = tag_names
         self.rating_indexes = rating_indexes
@@ -268,7 +268,7 @@ if __name__ == '__main__':
 
     epoch_len = len(batches)
     image_backend = ImageBackend(batches, model_target_size)
-    save_backend = SaveQualityBackend(tag_names, rating_indexes, character_indexes, general_indexes)
+    save_backend = SaveTagBackend(tag_names, rating_indexes, character_indexes, general_indexes)
 
     def exit_handler(image_backend, save_backend):
         image_backend.keep_loading = False

@@ -51,7 +51,7 @@ class Classifier(torch.nn.Module):
 
 
 class ImageBackend():
-    def __init__(self, batches, processor, load_queue_lenght=256, max_load_workers=4):
+    def __init__(self, batches, processor, load_queue_lenght=256, max_load_workers=8):
         self.load_queue_lenght = 0
         self.keep_loading = True
         self.batches = Queue()
