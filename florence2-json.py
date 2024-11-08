@@ -22,6 +22,7 @@ from tqdm import tqdm
 
 batch_size = 8
 image_ext = ".jxl"
+caption_key = "florence-2-base-promptgen-v1-5"
 model_id = "MiaoshouAI/Florence-2-base-PromptGen-v1.5"
 revision = "c06a5f02cc6071a5d65ee5d294cf3732d3097540"
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
@@ -189,7 +190,7 @@ def get_aesthetic_tag(score):
 def get_tags_from_json(json_path):
     with open(json_path, "r") as json_file:
         json_data = json.load(json_file)
-    if not json_data.get("florence-2-base-promptgen-v1-5", ""):
+    if not json_data.get(caption_key, ""):
         return ""
     line = f"year {json_data['created_at'][:4]}"
     if json_data.get("special_tags", ""):
@@ -323,7 +324,7 @@ class SaveCaptionBackend():
     def save_to_file(self, data, path):
         with open(path, "r") as f:
             json_data = json.load(f)
-        json_data["florence-2-base-promptgen-v1-5"] = data.split("\n", maxsplit=1)[0].replace("\r", "")
+        json_data[caption_key] = data.split("\n", maxsplit=1)[0].replace("\r", "")
         with open(path, "w") as f:
             json.dump(json_data, f)
 
@@ -363,19 +364,19 @@ if __name__ == '__main__':
             json_path = os.path.splitext(image_path)[0]+".json"
             with open(json_path, "r") as f:
                 json_data = json.load(f)
-            if (not json_data.get("florence-2-base-promptgen-v1-5", "")
-                or "1girl" in json_data["florence-2-base-promptgen-v1-5"]
-                or "2girl" in json_data["florence-2-base-promptgen-v1-5"]
-                or "3girl" in json_data["florence-2-base-promptgen-v1-5"]
-                or "4girl" in json_data["florence-2-base-promptgen-v1-5"]
-                or "1boy" in json_data["florence-2-base-promptgen-v1-5"]
-                or "2boy" in json_data["florence-2-base-promptgen-v1-5"]
-                or "3boy" in json_data["florence-2-base-promptgen-v1-5"]
-                or "4boy" in json_data["florence-2-base-promptgen-v1-5"]
-                or ", multiple girls," in json_data["florence-2-base-promptgen-v1-5"]
-                or ", multiple boys," in json_data["florence-2-base-promptgen-v1-5"]
-                or "\\)" in json_data["florence-2-base-promptgen-v1-5"]
-                or "\\(" in json_data["florence-2-base-promptgen-v1-5"]
+            if (not json_data.get(caption_key, "")
+                or "1girl" in json_data[caption_key]
+                or "2girl" in json_data[caption_key]
+                or "3girl" in json_data[caption_key]
+                or "4girl" in json_data[caption_key]
+                or "1boy" in json_data[caption_key]
+                or "2boy" in json_data[caption_key]
+                or "3boy" in json_data[caption_key]
+                or "4boy" in json_data[caption_key]
+                or ", multiple girls," in json_data[caption_key]
+                or ", multiple boys," in json_data[caption_key]
+                or "\\)" in json_data[caption_key]
+                or "\\(" in json_data[caption_key]
             ):
                 image_paths.append(image_path)
         except Exception as e:

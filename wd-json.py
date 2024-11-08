@@ -139,19 +139,22 @@ class SaveQualityBackend():
 
     def save_to_file(self, data, path):
         rating, character_strings, sorted_general_strings = data[0], data[1], data[2]
-        json_data = {}
-        json_data["rating"] = rating
-        json_data["tag_string_character"] = character_strings
-        json_data["tag_string_general"] = sorted_general_strings
-        #json_data["special_tags"] = "visual_novel_cg"
-        if not json_data.get("tag_string_copyright", ""):
+        if os.path.exists(path):
+            with open(path, "r") as json_file:
+                json_data = json.load(json_file)
+        else:
+            json_data = {}
+            json_data["rating"] = rating
+            json_data["tag_string_character"] = character_strings
+            json_data["tag_string_general"] = sorted_general_strings
             json_data["tag_string_copyright"] = ""
-        if not json_data.get("tag_string_artist", ""):
             json_data["tag_string_artist"] = ""
-        if not json_data.get("tag_string_meta", ""):
             json_data["tag_string_meta"] = ""
-        if not json_data.get("created_at", ""):
             json_data["created_at"] = "none"
+        json_data["wd_rating"] = rating
+        json_data["wd_tag_string_character"] = character_strings
+        json_data["wd_tag_string_general"] = sorted_general_strings
+        #json_data["special_tags"] = "visual_novel_cg"
         with open(path, "w") as f:
             json.dump(json_data, f)
 
@@ -243,7 +246,12 @@ if __name__ == '__main__':
     for image_path in tqdm(file_list):
         try:
             json_path = os.path.splitext(image_path)[0]+".json"
-            if not os.path.exists(json_path):
+            if os.path.exists(json_path):
+                with open(json_path, "r") as json_file:
+                    json_data = json.load(json_file)
+                if not json_data.get("wd_tag_string_general", ""):
+                    image_paths.append(image_path)
+            else:
                 image_paths.append(image_path)
         except Exception as e:
             print(f"ERROR: {json_path} MESSAGE: {e}")
