@@ -488,10 +488,10 @@ if __name__ == '__main__':
                 error_file.close()
             steps_after_gc = steps_after_gc + 1
             if steps_after_gc == 0 or steps_after_gc >= 16 if "xpu" not in device else 1:
+                gc.collect()
                 if "cpu" not in device:
                     getattr(torch, torch.device(device).type).synchronize()
                     getattr(torch, torch.device(device).type).empty_cache()
-                gc.collect()
                 steps_after_gc = 1 if steps_after_gc == 0 else 0
 
     atexit.unregister(exit_handler)

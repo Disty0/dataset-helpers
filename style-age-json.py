@@ -27,7 +27,7 @@ Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 
 class ImageBackend():
-    def __init__(self, batches, load_queue_lenght=256, max_load_workers=8):
+    def __init__(self, batches, load_queue_lenght=256, max_load_workers=12):
         self.load_queue_lenght = 0
         self.keep_loading = True
         self.batches = Queue()

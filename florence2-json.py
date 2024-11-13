@@ -227,7 +227,7 @@ def get_tags_from_json(json_path):
 
 
 class ImageBackend():
-    def __init__(self, batches, processor, load_queue_lenght=32, max_load_workers=4):
+    def __init__(self, batches, processor, load_queue_lenght=32, max_load_workers=8):
         self.load_queue_lenght = 0
         self.keep_loading = True
         self.batches = Queue()
@@ -429,10 +429,10 @@ if __name__ == '__main__':
                 error_file.close()
             steps_after_gc = steps_after_gc + 1
             if steps_after_gc == 0 or steps_after_gc >= 10000:
+                gc.collect()
                 if "cpu" not in device:
                     getattr(torch, torch.device(device).type).synchronize()
                     getattr(torch, torch.device(device).type).empty_cache()
-                gc.collect()
                 steps_after_gc = 1 if steps_after_gc == 0 else 0
 
     atexit.unregister(exit_handler)
