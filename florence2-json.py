@@ -80,6 +80,7 @@ meta_blacklist = [
     "audio",
     "video",
     "photoshop_(medium)",
+    "spoilers",
 ]
 
 
@@ -193,16 +194,32 @@ def get_tags_from_json(json_path):
     if not json_data.get(caption_key, ""):
         return ""
     line = f"year {json_data['created_at'][:4]}"
+
     if json_data.get("special_tags", ""):
         for special_tag in json_data["special_tags"].split(" "):
             if special_tag:
                 line += f", {special_tag.replace('_', ' ')}"
+
     for tag in json_data["tag_string_general"].split(" "):
         if tag:
             line += f", {tag.replace('_', ' ') if len(tag) > 3 else tag}"
+
     for meta_tag in json_data["tag_string_meta"].split(" "):
         if meta_tag and not any([bool(meta_tag_blacklist in meta_tag) for meta_tag_blacklist in meta_blacklist]):
             line += f", {meta_tag.replace('_', ' ')}"
+
+    for char in json_data["tag_string_character"].split(" "):
+        if char:
+            line += f", character {char.replace('_', ' ')}"
+
+    for cpr in json_data["tag_string_copyright"].split(" "):
+        if cpr:
+            line += f", from {cpr.replace('_', ' ')}"
+
+    for artist in json_data["tag_string_artist"].split(" "):
+        if artist:
+            line += f", art by {artist.replace('_', ' ')}"
+
     if json_data["rating"] == "g":
         line += ", sfw"
     elif json_data["rating"] == "s":
@@ -211,18 +228,13 @@ def get_tags_from_json(json_path):
         line += ", nsfw"
     elif json_data["rating"] == "e":
         line += ", explicit nsfw"
-    for char in json_data["tag_string_character"].split(" "):
-        if char:
-            line += f", character {char.replace('_', ' ')}"
-    for cpr in json_data["tag_string_copyright"].split(" "):
-        if cpr:
-            line += f", from {cpr.replace('_', ' ')}"
-    for artist in json_data["tag_string_artist"].split(" "):
-        if artist:
-            line += f", art by {artist.replace('_', ' ')}"
+
     if json_data.get('aesthetic-shadow-v2', None) is not None:
         line += f", {get_aesthetic_tag(json_data['aesthetic-shadow-v2'])}"
-    line += f", {get_quality_tag(json_data)}"
+
+    if json_data.get("score", None) is not None or json_data.get("wd-aes-b32-v0", None) is not None :
+        line += f", {get_quality_tag(json_data)}"
+
     return line
 
 

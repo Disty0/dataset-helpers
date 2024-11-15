@@ -6,13 +6,13 @@ import glob
 import time
 import json
 import atexit
+import random
 from queue import Queue
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
 
 
 image_ext = ".jxl"
-#out_path = "/mnt/DataSSD/AI/anime_image_dataset/dataset/danbooru/danbooru-wd"
 out_path = ""
 steps_after_gc = 0
 
@@ -43,6 +43,48 @@ meta_blacklist = [
     "audio",
     "video",
     "photoshop_(medium)",
+    "spoilers",
+]
+
+
+style_age_tags = [
+    "1920s_(style)",
+    "1930s_(style)",
+    "1950s_(style)",
+    "1960s_(style)",
+    "1970s_(style)",
+    "1980s_(style)",
+    "1990s_(style)",
+    "2000s_(style)",
+    "2010s_(style)",
+    "2015s_(style)",
+    "2020s_(style)",
+]
+
+
+no_shuffle_tags = [
+    "1girl",
+    "2girls",
+    "3girls",
+    "4girls",
+    "5girls",
+    "6+girls",
+    "multiple_girls",
+    "1boy",
+    "2boys",
+    "3boys",
+    "4boys",
+    "5boys",
+    "6+boys",
+    "multiple_boys",
+    "male_focus",
+    "1other",
+    "2others",
+    "3others",
+    "4others",
+    "5others",
+    "6+others",
+    "multiple_others",
 ]
 
 
@@ -156,28 +198,42 @@ def get_aesthetic_tag(score):
 def get_tags_from_json(json_path):
     with open(json_path, "r") as json_file:
         json_data = json.load(json_file)
+    style_age_tag_added = False
+    split_general_tags = json_data["tag_string_general"].split(" ")
+    split_meta_tags = json_data["tag_string_meta"].split(" ")
+
     line = get_aesthetic_tag(json_data['aesthetic-shadow-v2'])
     line += f", {get_quality_tag(json_data)}"
     line += f", year {json_data['created_at'][:4]}"
+
+    for style_age_tag in style_age_tags:
+        if style_age_tag in split_general_tags:
+            split_general_tags.pop(split_general_tags.index(style_age_tag))
+            if not style_age_tag_added and int(style_age_tag[:3]) < int(json_data['created_at'][:3]):
+                line += f", {style_age_tag[:4]}s (style)"
+                style_age_tag_added = True
+    if (not style_age_tag_added and json_data.get("style_age", "")
+        and (
+            int(json_data['style_age'][:3]) < int(json_data['created_at'][:3])
+            or ((2015 <= int(json_data['created_at'][:4]) < 2020) and int(json_data['style_age'][:4]) < 2015)
+        )
+    ):
+        line += f", {json_data['style_age'][:4]}s (style)"
+
     if json_data.get("special_tags", ""):
         for special_tag in json_data["special_tags"].split(" "):
             if special_tag:
                 line += f", {special_tag.replace('_', ' ')}"
+
     for artist in json_data["tag_string_artist"].split(" "):
         if artist:
             line += f", art by {artist.replace('_', ' ')}"
-    for cpr in json_data["tag_string_copyright"].split(" "):
-        if cpr and cpr != "original":
-            line += f", from {cpr.replace('_', ' ')}"
-    for char in json_data["tag_string_character"].split(" "):
-        if char:
-            line += f", character {char.replace('_', ' ')}"
-    for tag in json_data["tag_string_general"].split(" "):
-        if tag:
-            line += f", {tag.replace('_', ' ') if len(tag) > 3 else tag}"
-    for meta_tag in json_data["tag_string_meta"].split(" "):
-        if meta_tag and not any([bool(meta_tag_blacklist in meta_tag) for meta_tag_blacklist in meta_blacklist]):
-            line += f", {meta_tag.replace('_', ' ')}"
+
+    for medium_tag in split_meta_tags:
+        if medium_tag.endswith("_(medium)") and medium_tag != "photoshop_(medium)":
+            split_meta_tags.pop(split_meta_tags.index(medium_tag))
+            line += f", {medium_tag.replace('_', ' ')}"
+
     if json_data["rating"] == "g":
         line += ", sfw"
     elif json_data["rating"] == "s":
@@ -186,6 +242,36 @@ def get_tags_from_json(json_path):
         line += ", nsfw"
     elif json_data["rating"] == "e":
         line += ", explicit nsfw"
+
+    for no_shuffle_tag in no_shuffle_tags:
+        if no_shuffle_tag in split_general_tags:
+            split_general_tags.pop(split_general_tags.index(no_shuffle_tag))
+            line += f", {no_shuffle_tag.replace('_', ' ')}"
+
+    for char in json_data["tag_string_character"].split(" "):
+        if char:
+            line += f", character {char.replace('_', ' ')}"
+
+    for cpr in json_data["tag_string_copyright"].split(" "):
+        if cpr and cpr != "original":
+            line += f", from {cpr.replace('_', ' ')}"
+
+    random.shuffle(split_general_tags)
+    for tag in split_general_tags:
+        if tag:
+            line += f", {tag.replace('_', ' ') if len(tag) > 3 else tag}"
+
+    if json_data.get("wd_tag_string_general", ""):
+        for wd_tag in json_data["wd_tag_string_general"].split(" "):
+            wd_tag = wd_tag.replace('_', ' ') if len(wd_tag) > 3 else wd_tag
+            if wd_tag and wd_tag not in line:
+                line += f", {wd_tag}"
+
+    if split_meta_tags:
+        for meta_tag in split_meta_tags:
+            if meta_tag and not any([bool(meta_tag_blacklist in meta_tag) for meta_tag_blacklist in meta_blacklist]):
+                line += f", {meta_tag.replace('_', ' ')}"
+
     return line
 
 
