@@ -14,10 +14,12 @@ def write_tag(file_name):
     tags = caption_file.readlines()[0].replace("\n", "")
     caption_file.close()
     tags_file_list.write(f"{file_name}  :::  {tags}\n")
-    for tag in tags.rsplit(", "):
-        tags_list.write(tag + "\n")
-    for word in tags.replace(",", "").rsplit(" "):
-        words_list.write(word + "\n")
+    for tag in tags.split(", "):
+        if tag:
+            tags_list.write(tag + "\n")
+    for word in tags.replace(",", "").replace(".", "").replace("\n", " ").split(" "):
+        if word:
+            words_list.write(word + "\n")
 
 
 print("Searching for TXT files...")

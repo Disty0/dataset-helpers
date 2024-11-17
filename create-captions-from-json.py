@@ -23,6 +23,8 @@ cleanup_caption_list = [
     ["\"Vocaiol,\"", "\"Vocaloid,\""],
     ["Gensishn Impact", "Genshin Impact"],
     ["Gensishk Pnck", "Genshin Impact"],
+    ["Azur_lane", "Azur Lane"],
+    ["Kono Koushiki: Sekai ni Shukufuku o!", "Kono Subarashii Sekai ni Shukufuku wo!"],
     # qwen2
     #####################################################
     # florence2
