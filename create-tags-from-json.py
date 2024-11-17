@@ -198,14 +198,13 @@ def get_aesthetic_tag(score):
 def get_tags_from_json(json_path):
     with open(json_path, "r") as json_file:
         json_data = json.load(json_file)
-    style_age_tag_added = False
-    split_general_tags = json_data["tag_string_general"].split(" ")
-    split_meta_tags = json_data["tag_string_meta"].split(" ")
 
     line = get_aesthetic_tag(json_data['aesthetic-shadow-v2'])
     line += f", {get_quality_tag(json_data)}"
     line += f", year {json_data['created_at'][:4]}"
 
+    style_age_tag_added = False
+    split_general_tags = json_data["tag_string_general"].split(" ")
     for style_age_tag in style_age_tags:
         if style_age_tag in split_general_tags:
             split_general_tags.pop(split_general_tags.index(style_age_tag))
@@ -229,7 +228,8 @@ def get_tags_from_json(json_path):
         if artist:
             line += f", art by {artist.replace('_', ' ')}"
 
-    for medium_tag in split_meta_tags:
+    split_meta_tags = json_data["tag_string_meta"].split(" ")
+    for medium_tag in json_data["tag_string_meta"].split(" "):
         if medium_tag.endswith("_(medium)") and medium_tag != "photoshop_(medium)":
             split_meta_tags.pop(split_meta_tags.index(medium_tag))
             line += f", {medium_tag.replace('_', ' ')}"

@@ -21,6 +21,8 @@ steps_after_gc = 0
 cleanup_caption_list = [
     [" Hatsune Maku, ", " Hatsune Miku, "],
     ["\"Vocaiol,\"", "\"Vocaloid,\""],
+    ["Gensishn Impact", "Genshin Impact"],
+    ["Gensishk Pnck", "Genshin Impact"],
     # qwen2
     #####################################################
     # florence2

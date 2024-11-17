@@ -247,9 +247,6 @@ def get_tags_from_json(json_path):
     with open(json_path, "r") as json_file:
         json_data = json.load(json_file)
     copyright_tags = ""
-    style_age_tag_added = False
-    split_general_tags = json_data["tag_string_general"].split(" ")
-    split_meta_tags = json_data["tag_string_meta"].split(" ")
 
     for char in json_data["tag_string_character"].split(" "):
         if char:
@@ -267,6 +264,9 @@ def get_tags_from_json(json_path):
         copyright_tags = copyright_tags[2:].lower()
 
     line = f"year {json_data['created_at'][:4]}"
+
+    style_age_tag_added = False
+    split_general_tags = json_data["tag_string_general"].split(" ")
     for style_age_tag in style_age_tags:
         if style_age_tag in split_general_tags:
             split_general_tags.pop(split_general_tags.index(style_age_tag))
@@ -286,7 +286,8 @@ def get_tags_from_json(json_path):
             if special_tag:
                 line += f", {special_tag.replace('_', ' ')}"
 
-    for medium_tag in split_meta_tags:
+    split_meta_tags = json_data["tag_string_meta"].split(" ")
+    for medium_tag in json_data["tag_string_meta"].split(" "):
         if medium_tag.endswith("_(medium)") and medium_tag != "photoshop_(medium)":
             split_meta_tags.pop(split_meta_tags.index(medium_tag))
             line += f", {medium_tag.replace('_', ' ')}"
@@ -377,7 +378,7 @@ class ImageBackend():
 
     def load_from_file(self, image_path):
         copyright_tags = ""
-        prompt = "Describe this anime image in detail. Describe the art style, anime style and the quality of this anime image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions as well. Pretend that anime and cartoon is the reality. Don't overdetail the caption."
+        prompt = "Describe this anime image in detail. Describe the art style, anime style and the quality of this anime image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions as well. Pretend that anime and cartoon is the reality."
         json_path = os.path.splitext(image_path)[0]+".json"
         if os.path.exists(json_path):
             booru_tags, copyright_tags = get_tags_from_json(json_path)
