@@ -195,6 +195,44 @@ def get_aesthetic_tag(score):
         return "bad aesthetic"
 
 
+def dedupe_tags(split_tags):
+    if len(split_tags) <= 1:
+        return split_tags
+    split_tags.sort(key=len, reverse=True)
+    deduped_tags = []
+    ordered_tag_string = ""
+    for tag in split_tags:
+        spaced_tag = tag + "_"
+        if tag and spaced_tag not in ordered_tag_string and tag not in deduped_tags:
+            ordered_tag_string += spaced_tag
+            deduped_tags.append(tag)
+    random.shuffle(deduped_tags)
+    return deduped_tags
+
+
+def dedupe_character_tags(split_tags):
+    if len(split_tags) <= 1:
+        return split_tags
+    split_tags.sort(key=len, reverse=True)
+    deduped_tags = []
+    ordered_tag_string = ""
+    for tag in split_tags:
+        pruned_tag_end = ""
+        pruned_tags = tag.rsplit("_(", maxsplit=1)
+        if len(pruned_tags) > 1:
+            pruned_tag, pruned_tag_end = pruned_tags
+            pruned_tag_end = "_(" + pruned_tag_end
+        else:
+            pruned_tag = pruned_tags[0]
+        spaced_tag = tag + "_"
+        if tag and spaced_tag not in ordered_tag_string and tag not in deduped_tags and not (
+        pruned_tag in ordered_tag_string and pruned_tag_end in ordered_tag_string):
+            ordered_tag_string += spaced_tag
+            deduped_tags.append(tag)
+    random.shuffle(deduped_tags)
+    return deduped_tags
+
+
 def get_tags_from_json(json_path):
     with open(json_path, "r") as json_file:
         json_data = json.load(json_file)
@@ -229,6 +267,7 @@ def get_tags_from_json(json_path):
             line += f", art by {artist.replace('_', ' ')}"
 
     split_meta_tags = json_data["tag_string_meta"].split(" ")
+    random.shuffle(split_meta_tags)
     for medium_tag in json_data["tag_string_meta"].split(" "):
         if medium_tag.endswith("_(medium)") and medium_tag != "photoshop_(medium)":
             split_meta_tags.pop(split_meta_tags.index(medium_tag))
@@ -248,24 +287,25 @@ def get_tags_from_json(json_path):
             split_general_tags.pop(split_general_tags.index(no_shuffle_tag))
             line += f", {no_shuffle_tag.replace('_', ' ')}"
 
-    for char in json_data["tag_string_character"].split(" "):
+    for char in dedupe_character_tags(json_data["tag_string_character"].split(" ")):
         if char:
             line += f", character {char.replace('_', ' ')}"
 
-    for cpr in json_data["tag_string_copyright"].split(" "):
-        if cpr and cpr != "original":
+    split_copyright_tags = json_data["tag_string_copyright"].split(" ")
+    if "original" in split_copyright_tags:
+        split_copyright_tags.pop(split_copyright_tags.index("original"))
+    for cpr in dedupe_tags(split_copyright_tags):
+        if cpr:
             line += f", from {cpr.replace('_', ' ')}"
-
-    random.shuffle(split_general_tags)
-    for tag in split_general_tags:
-        if tag:
-            line += f", {tag.replace('_', ' ') if len(tag) > 3 else tag}"
 
     if json_data.get("wd_tag_string_general", ""):
         for wd_tag in json_data["wd_tag_string_general"].split(" "):
-            wd_tag = wd_tag.replace('_', ' ') if len(wd_tag) > 3 else wd_tag
-            if wd_tag and wd_tag not in line:
-                line += f", {wd_tag}"
+            if wd_tag and wd_tag not in no_shuffle_tags and wd_tag not in style_age_tags and wd_tag not in split_general_tags:
+                split_general_tags.append(wd_tag)
+
+    for tag in dedupe_tags(split_general_tags):
+        if tag:
+            line += f", {tag.replace('_', ' ') if len(tag) > 3 else tag}"
 
     if split_meta_tags:
         for meta_tag in split_meta_tags:
