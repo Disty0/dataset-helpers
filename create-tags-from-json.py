@@ -202,7 +202,7 @@ def dedupe_tags(split_tags):
     deduped_tags = []
     ordered_tag_string = ""
     for tag in split_tags:
-        spaced_tag = tag + "_"
+        spaced_tag = "_" + tag + "_"
         if tag and spaced_tag not in ordered_tag_string and tag not in deduped_tags:
             ordered_tag_string += spaced_tag
             deduped_tags.append(tag)
@@ -224,7 +224,7 @@ def dedupe_character_tags(split_tags):
             pruned_tag_end = "_(" + pruned_tag_end
         else:
             pruned_tag = pruned_tags[0]
-        spaced_tag = tag + "_"
+        spaced_tag = "_" + tag + "_"
         if tag and spaced_tag not in ordered_tag_string and tag not in deduped_tags and not (
         pruned_tag in ordered_tag_string and pruned_tag_end in ordered_tag_string):
             ordered_tag_string += spaced_tag
