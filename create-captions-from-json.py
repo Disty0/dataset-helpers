@@ -18,6 +18,43 @@ out_path = ""
 steps_after_gc = 0
 
 
+cleanup_start_list = [
+    ["a highly detailed, high-quality anime image featuring ", ""],
+    ["a highly detailed, high-quality ", "a "],
+    ["a highly detailed, ", "a "],
+    ["a highly detailed ", "a "],
+    ["a high-quality, ", "a "],
+    ["a high-quality ", "a "],
+    ["an anime image featuring ", ""],
+    ["a anime image featuring ", ""],
+    ["a anime", "an anime"],
+    ["a explicit", "an explicit"],
+]
+
+
+cleanup_end_list = [
+    "assistant",
+    "the",
+    "Describe",
+    "the",
+    "assistant",
+    "image in",
+    "image in detail",
+    "bod",
+    "genitals",
+    "sexual"
+    "sex positions",
+    "positions",
+    "sexual intercourse",
+    "intercourse",
+    "as well",
+    "anime style and the quality of this image as well",
+    "the",
+]
+cleanup_end_list.extend(cleanup_end_list)
+cleanup_end_list.extend(cleanup_end_list)
+
+
 cleanup_caption_list = [
     [" Hatsune Maku, ", " Hatsune Miku, "],
     ["\"Vocaiol,\"", "\"Vocaloid,\""],
@@ -25,8 +62,20 @@ cleanup_caption_list = [
     ["Gensishk Pnck", "Genshin Impact"],
     ["Gensish Pnol", "Genshin Impact"],
     ["Gensishenokai", "Genshin Impact"],
+    ["Gensish Koyo", "Genshin Impact"],
     ["Azur_lane", "Azur Lane"],
     ["Kono Koushiki: Sekai ni Shukufuku o!", "Kono Subarashii Sekai ni Shukufuku wo!"],
+    [" the the ", " the "],
+    [" typical of high-quality ", " typical of "],
+    ["Describe the", ""],
+    ["Describe this", ""],
+    ["Describe nudity", ""],
+    ["Describe this anime", ""],
+    ["Describe\nassistant", "\n"],
+    ["\nassistant\n", "\n"],
+    [",.", "."],
+    [" ,", ","],
+    [" .", "."],
     # qwen2
     #####################################################
     # florence2
@@ -124,11 +173,15 @@ def cleanup_whitespace(caption):
         caption = caption[1:]
     while caption[0] == " ":
         caption = caption[1:]
+    while caption[-1] == "\n":
+        caption = caption[:-1]
     while caption[-1] == " ":
         caption = caption[:-1]
     while caption[-1] == ".":
         caption = caption[:-1]
     while caption[-1] == ",":
+        caption = caption[:-1]
+    while caption[-1] == "\n":
         caption = caption[:-1]
     return caption
 
@@ -139,6 +192,14 @@ def cleanup_caption(caption):
     for old_tag, new_tag in cleanup_caption_list:
         caption = caption.replace(old_tag, new_tag)
     caption = cleanup_whitespace(caption)
+    for old_tag, new_tag in cleanup_start_list:
+        if caption.startswith(old_tag):
+            caption = new_tag + caption.removeprefix(old_tag)
+    caption = cleanup_whitespace(caption)
+    for old_tag in cleanup_end_list:
+        while caption.endswith(old_tag):
+            caption = caption.removesuffix(old_tag)
+            caption = cleanup_whitespace(caption)
     return caption
 
 
