@@ -63,6 +63,8 @@ cleanup_caption_list = [
     ["Gensish Pnol", "Genshin Impact"],
     ["Gensishenokai", "Genshin Impact"],
     ["Gensish Koyo", "Genshin Impact"],
+    ["Gensish影响", "Genshin Impact"],
+    ["Gensishnai Pnai", "Genshin Impact"],
     ["Azur_lane", "Azur Lane"],
     ["Kono Koushiki: Sekai ni Shukufuku o!", "Kono Subarashii Sekai ni Shukufuku wo!"],
     [" the the ", " the "],
