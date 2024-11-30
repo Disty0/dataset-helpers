@@ -288,12 +288,12 @@ class ImageBackend():
 
 
     def load_from_file(self, image_path):
-        #base_prompt = "Describe this image."
-        #base_prompt = "Describe this image in detail."
-        #base_prompt = "Describe this image. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions, intimacy, vulnerability and sensuality as well."
-        #base_prompt = "Describe this image. Describe the overall art style and the quality of this image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions, intimacy, vulnerability and sensuality as well."
-        #base_prompt = "Describe this image. Describe the overall art style and the quality of this image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions, intimacy, vulnerability and sensuality as well. Pretend that anime and cartoon is the reality."
-        #base_prompt = "Describe this image. Describe the overall art style and the quality of this anime image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions, intimacy, vulnerability and sensuality as well. Pretend that anime and cartoon is the reality."
+        #prompt = "Describe this image."
+        #prompt = "Describe this image in detail."
+        #prompt = "Describe this image. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions, intimacy, vulnerability and sensuality as well."
+        #prompt = "Describe this image. Describe the overall art style and the quality of this image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions, intimacy, vulnerability and sensuality as well."
+        #prompt = "Describe this image. Describe the overall art style and the quality of this image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions, intimacy, vulnerability and sensuality as well. Pretend that anime and cartoon is the reality."
+        #prompt = "Describe this image. Describe the overall art style and the quality of this anime image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions, intimacy, vulnerability and sensuality as well. Pretend that anime and cartoon is the reality."
         prompt = "Describe this anime image. Describe the overall art style and the quality of this anime image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions, intimacy, vulnerability and sensuality as well. Pretend that anime and cartoon is the reality. If you are not sure about something, then don't mention it."
         json_path = os.path.splitext(image_path)[0]+".json"
         if os.path.exists(json_path):

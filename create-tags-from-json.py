@@ -171,7 +171,7 @@ def get_quality_tag_from_wd(score):
 
 def get_quality_tag(json_data):
     if json_data.get("score", None) is not None:
-        quality_score = get_quality_score_from_rating(json_data.get("fav_count", json_data["score"]), json_data["rating"])
+        quality_score = get_quality_score_from_rating(json_data.get("fav_count", json_data["score"]), json_data.get("wd_rating", json_data["rating"]))
         if int(json_data["id"]) > 7000000:
             wd_quality_score = get_quality_tag_from_wd(json_data.get("wd-aes-b32-v0", 0))
             quality_score = max(quality_score, wd_quality_score)
@@ -273,13 +273,14 @@ def get_tags_from_json(json_path):
             split_meta_tags.pop(split_meta_tags.index(medium_tag))
             line += f", {medium_tag.replace('_', ' ')}"
 
-    if json_data["rating"] == "g":
+    rating = json_data.get("wd_rating", json_data["rating"])
+    if rating == "g":
         line += ", sfw"
-    elif json_data["rating"] == "s":
+    elif rating == "s":
         line += ", suggestive"
-    elif json_data["rating"] == "q":
+    elif rating == "q":
         line += ", nsfw"
-    elif json_data["rating"] == "e":
+    elif rating == "e":
         line += ", explicit nsfw"
 
     for no_shuffle_tag in no_shuffle_tags:
