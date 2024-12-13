@@ -405,7 +405,7 @@ class ImageBackend():
             scale = math.sqrt(image_size / max_image_size)
             new_width = int(width/scale)
             new_height = int(height/scale)
-            image = image.resize((new_width, new_height), Image.LANCZOS)
+            image = image.resize((new_width, new_height), Image.BICUBIC)
         background = Image.new('RGBA', image.size, (255, 255, 255))
         image = Image.alpha_composite(background, image.convert("RGBA")).convert("RGB")
         return [image, image_path, text_prompt, copyright_tags]
