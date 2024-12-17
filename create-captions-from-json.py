@@ -19,8 +19,8 @@ steps_after_gc = 0
 
 
 cleanup_start_list = [
-    ["This is"],
-    ["This "],
+    ["This is", ""],
+    ["This ", ""],
     ["a highly detailed, high-quality anime image featuring ", ""],
     ["a highly detailed, high-quality ", "a "],
     ["a highly detailed, ", "a "],

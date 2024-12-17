@@ -559,7 +559,7 @@ if __name__ == '__main__':
         model = ipex_llm.optimize_model(model, low_bit="sym_int8")
         model = model.to(device)
     else:
-        #torch.cuda.tunable.enable(val=True)
+        #torch.cuda.tunable.enable(val=True) # tunableops causes nonsense outputs
         #torch.set_float32_matmul_precision('high')
         torch.compiler.cudagraph_mark_step_begin()
         model.visual = torch.compile(model.visual, backend="inductor")
