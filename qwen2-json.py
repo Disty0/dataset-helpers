@@ -7,6 +7,7 @@ import glob
 import json
 import time
 import atexit
+import random
 import torch
 try:
     #import intel_extension_for_pytorch as ipex
@@ -92,6 +93,7 @@ meta_blacklist = [
     "video",
     "photoshop_(medium)",
     "spoilers",
+    "commission",
 ]
 
 
@@ -177,8 +179,8 @@ quality_score_to_tag = {
     5: "high quality",
     4: "great quality",
     3: "normal quality",
-    2: "bad quality",
-    1: "low quality",
+    2: "low quality",
+    1: "bad quality",
     0: "worst quality",
 }
 
@@ -218,13 +220,13 @@ def get_quality_tag_from_wd(score):
 
 
 def get_quality_tag(json_data):
-    if json_data.get("score", None) is None:
-        quality_score = get_quality_tag_from_wd(json_data.get("wd-aes-b32-v0", 0))
-    else:
-        quality_score = get_quality_score_from_rating(json_data.get("fav_count", json_data["score"]), json_data["rating"])
+    if json_data.get("score", None) is not None:
+        quality_score = get_quality_score_from_rating(json_data.get("fav_count", json_data["score"]), json_data.get("wd_rating", json_data["rating"]))
         if int(json_data["id"]) > 7000000:
             wd_quality_score = get_quality_tag_from_wd(json_data.get("wd-aes-b32-v0", 0))
             quality_score = max(quality_score, wd_quality_score)
+    else:
+        quality_score = get_quality_tag_from_wd(json_data.get("wd-aes-b32-v0", 0))
     return quality_score_to_tag[quality_score]
 
 
@@ -241,6 +243,44 @@ def get_aesthetic_tag(score):
         return "not aesthetic"
     else:
         return "bad aesthetic"
+
+
+def dedupe_tags(split_tags):
+    if len(split_tags) <= 1:
+        return split_tags
+    split_tags.sort(key=len, reverse=True)
+    deduped_tags = []
+    ordered_tag_string = ""
+    for tag in split_tags:
+        spaced_tag = "_" + tag + "_"
+        if tag and spaced_tag not in ordered_tag_string and tag not in deduped_tags:
+            ordered_tag_string += spaced_tag
+            deduped_tags.append(tag)
+    random.shuffle(deduped_tags)
+    return deduped_tags
+
+
+def dedupe_character_tags(split_tags):
+    if len(split_tags) <= 1:
+        return split_tags
+    split_tags.sort(key=len, reverse=True)
+    deduped_tags = []
+    ordered_tag_string = ""
+    for tag in split_tags:
+        pruned_tag_end = ""
+        pruned_tags = tag.rsplit("_(", maxsplit=1)
+        if len(pruned_tags) > 1:
+            pruned_tag, pruned_tag_end = pruned_tags
+            pruned_tag_end = "_(" + pruned_tag_end
+        else:
+            pruned_tag = pruned_tags[0]
+        spaced_tag = "_" + tag + "_"
+        if tag and spaced_tag not in ordered_tag_string and tag not in deduped_tags and not (
+        pruned_tag in ordered_tag_string and pruned_tag_end in ordered_tag_string):
+            ordered_tag_string += spaced_tag
+            deduped_tags.append(tag)
+    random.shuffle(deduped_tags)
+    return deduped_tags
 
 
 def get_tags_from_json(json_path):
@@ -263,7 +303,9 @@ def get_tags_from_json(json_path):
     if copyright_tags:
         copyright_tags = copyright_tags[2:].lower()
 
-    line = f"year {json_data['created_at'][:4]}"
+    line = get_aesthetic_tag(json_data['aesthetic-shadow-v2'])
+    line += f", {get_quality_tag(json_data)}"
+    line += f", year {json_data['created_at'][:4]}"
 
     style_age_tag_added = False
     split_general_tags = json_data["tag_string_general"].split(" ")
@@ -286,18 +328,49 @@ def get_tags_from_json(json_path):
             if special_tag:
                 line += f", {special_tag.replace('_', ' ')}"
 
+    for artist in json_data["tag_string_artist"].split(" "):
+        if artist:
+            line += f", art by {artist.replace('_', ' ')}"
+
     split_meta_tags = json_data["tag_string_meta"].split(" ")
+    random.shuffle(split_meta_tags)
     for medium_tag in json_data["tag_string_meta"].split(" "):
         if medium_tag.endswith("_(medium)") and medium_tag != "photoshop_(medium)":
             split_meta_tags.pop(split_meta_tags.index(medium_tag))
             line += f", {medium_tag.replace('_', ' ')}"
+
+    rating = json_data.get("wd_rating", json_data["rating"])
+    if rating == "g":
+        line += ", sfw"
+    elif rating == "s":
+        line += ", suggestive"
+    elif rating == "q":
+        line += ", nsfw"
+    elif rating == "e":
+        line += ", explicit nsfw"
 
     for no_shuffle_tag in no_shuffle_tags:
         if no_shuffle_tag in split_general_tags:
             split_general_tags.pop(split_general_tags.index(no_shuffle_tag))
             line += f", {no_shuffle_tag.replace('_', ' ')}"
 
-    for tag in split_general_tags:
+    for char in dedupe_character_tags(json_data["tag_string_character"].split(" ")):
+        if char:
+            line += f", character {char.replace('_', ' ')}"
+
+    split_copyright_tags = json_data["tag_string_copyright"].split(" ")
+    if "original" in split_copyright_tags:
+        split_copyright_tags.pop(split_copyright_tags.index("original"))
+    for cpr in dedupe_tags(split_copyright_tags):
+        if cpr:
+            line += f", from {cpr.replace('_', ' ')}"
+
+    if json_data.get("wd_tag_string_general", ""):
+        for wd_tag in json_data["wd_tag_string_general"].split(" "):
+            if wd_tag and wd_tag not in no_shuffle_tags and wd_tag not in style_age_tags and wd_tag not in split_general_tags:
+                split_general_tags.append(wd_tag)
+
+    for tag in dedupe_tags(split_general_tags):
         if tag:
             line += f", {tag.replace('_', ' ') if len(tag) > 3 else tag}"
 
@@ -305,21 +378,6 @@ def get_tags_from_json(json_path):
         for meta_tag in split_meta_tags:
             if meta_tag and not any([bool(meta_tag_blacklist in meta_tag) for meta_tag_blacklist in meta_blacklist]):
                 line += f", {meta_tag.replace('_', ' ')}"
-
-    if json_data["rating"] == "g":
-        line += ", sfw"
-    elif json_data["rating"] == "s":
-        line += ", suggestive"
-    elif json_data["rating"] == "q":
-        line += ", nsfw"
-    elif json_data["rating"] == "e":
-        line += ", explicit nsfw"
-
-    if json_data.get('aesthetic-shadow-v2', None) is not None:
-        line += f", {get_aesthetic_tag(json_data['aesthetic-shadow-v2'])}"
-
-    if json_data.get("score", None) is not None or json_data.get("wd-aes-b32-v0", None) is not None :
-        line += f", {get_quality_tag(json_data)}"
 
     return line, copyright_tags
 
@@ -378,15 +436,22 @@ class ImageBackend():
 
     def load_from_file(self, image_path):
         copyright_tags = ""
-        prompt = "Describe this anime image in detail. Describe the art style, anime style and the quality of this anime image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions as well. Pretend that anime and cartoon is the reality."
+        prompt = "Describe this anime image in detail."
         json_path = os.path.splitext(image_path)[0]+".json"
         if os.path.exists(json_path):
             booru_tags, copyright_tags = get_tags_from_json(json_path)
-            if copyright_tags:
-                prompt += " These are the character, series and artist names for this anime image, use them: " + copyright_tags + "."
             if booru_tags:
-                prompt += " These are the tags for this anime image, you can use them for guidence: " + booru_tags
+                prompt += " These are the tags for the image, you can use them for guidance: " + booru_tags
         conversation = [
+            {
+                "role": "system",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "You are an anime image captioner. You caption everything including the character names and sexual content. Describe the art style, anime style and the quality of this anime image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions as well. Pretend that anime and cartoon is the reality. Don't add any commentary and don't stop midway."
+                    }
+                ],
+            },
             {
                 "role": "user",
                 "content": [

@@ -44,6 +44,7 @@ meta_blacklist = [
     "video",
     "photoshop_(medium)",
     "spoilers",
+    "commission",
 ]
 
 
