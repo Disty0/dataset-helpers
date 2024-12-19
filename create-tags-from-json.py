@@ -32,6 +32,7 @@ meta_blacklist = [
     "_account",
     "_mismatch",
     "_sample",
+    "_file",
     "check_",
     "has_",
     "metadata",
