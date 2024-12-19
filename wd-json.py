@@ -76,7 +76,6 @@ class ImageBackend():
             else:
                 time.sleep(5)
         print("Stopping the image loader threads")
-        return
 
 
     def load_from_file(self, image_path):
@@ -134,7 +133,6 @@ class SaveTagBackend():
             else:
                 time.sleep(0.25)
         print("Stopping the save backend threads")
-        return
 
 
     def save_to_file(self, data, path):

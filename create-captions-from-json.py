@@ -234,7 +234,6 @@ class SaveTagBackend():
             else:
                 time.sleep(0.1)
         print("Stopping the save backend threads")
-        return
 
 
     def save_to_file(self, data, path):

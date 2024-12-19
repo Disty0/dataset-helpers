@@ -15,7 +15,7 @@ from PIL import Image # noqa: E402
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 
-class Bitstream:
+class JXLBitstream:
     """
     A stream of bits with methods for easy handling.
     """
@@ -24,13 +24,12 @@ class Bitstream:
         self.shift = 0
         self.bitstream = []
         self.file = file
+        self.offset = offset
         self.offsets = offsets
         if self.offsets:
             self.offset = self.offsets[0][1]
             self.previous_data_len = 0
             self.index = 0
-        else:
-            self.offset = offset
         self.file.seek(self.offset)
 
     def get_bits(self, length: int = 1) -> int:
@@ -65,7 +64,7 @@ def decode_codestream(file, offset=0, offsets=[]):
     """
 
     # Convert codestream to int within an object to get some handy methods.
-    codestream = Bitstream(file, offset=offset, offsets=offsets)
+    codestream = JXLBitstream(file, offset=offset, offsets=offsets)
 
     # Skip signature
     codestream.get_bits(16)

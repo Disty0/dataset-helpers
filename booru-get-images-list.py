@@ -39,8 +39,8 @@ general_blacklist = [
     "bad_reflection",
     "bad_multiple_views",
     "bad_anatomy",
-    "bad_vehicle_anatomy"
-    "bad_gun_anatomy"
+    "bad_vehicle_anatomy",
+    "bad_gun_anatomy",
     "bad_proportions",
     "bad_face",
     "bad_hands",
