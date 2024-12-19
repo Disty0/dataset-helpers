@@ -55,7 +55,7 @@ class Bitstream:
         self.index += 1
         self.file.seek(self.offsets[self.index][1])
         if self.shift + length > self.previous_data_len + self.offsets[self.index][2]:
-            self.partial_read(self, readed_length, length)
+            self.partial_read(readed_length, length)
 
 
 def decode_codestream(file, offset=0, offsets=[]):
@@ -207,7 +207,7 @@ big_file = open("out/big.txt", 'a')
 for image_path in tqdm(file_list):
     try:
         if os.path.getsize(image_path) < 102400:
-            #os.remove(image_path)
+            os.remove(image_path)
             small_file.write(image_path+"\n")
         elif os.path.getsize(image_path) > 10240000:
             if image_ext == ".jxl":
@@ -216,7 +216,6 @@ for image_path in tqdm(file_list):
                 width, height = imagesize.get(image_path)
             image_size = width * height
             if image_size > 4194304: # 2048x2048
-                """
                 image = Image.open(image_path)
                 scale = math.sqrt(image_size / 4194304)
                 new_width = int(width/scale)
@@ -224,7 +223,6 @@ for image_path in tqdm(file_list):
                 image = image.convert("RGBA").resize((new_width, new_height), Image.LANCZOS)
                 image.save(image_path, lossless=True)
                 image.close()
-                """
                 big_file.write(image_path+"\n")
     except Exception as e:
         os.makedirs("errors", exist_ok=True)
