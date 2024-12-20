@@ -44,7 +44,7 @@ cleanup_end_list = [
     "image in detail",
     "bod",
     "genitals",
-    "sexual"
+    "sexual",
     "sex positions",
     "positions",
     "sexual intercourse",

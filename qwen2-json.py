@@ -34,19 +34,6 @@ from PIL import Image # noqa: E402
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 
-if not use_flash_atten:
-    try:
-        import transformers
-        from transformers.dynamic_module_utils import get_imports
-        def fixed_get_imports(filename: str | os.PathLike) -> list[str]:
-            if not str(filename).endswith("modeling_florence2.py"):
-                return get_imports(filename)
-            imports = get_imports(filename)
-            imports.remove("flash_attn")
-            return imports
-        transformers.dynamic_module_utils.get_imports = fixed_get_imports
-    except Exception:
-        pass
 if torch.version.hip:
     try:
         # don't use this for training models, only for inference with latent encoder and embed encoder
