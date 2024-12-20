@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 image_ext = ".jxl"
 out_path = ""
 steps_after_gc = 0
+no_non_general_tags = False
 
 
 meta_blacklist = [
@@ -239,51 +240,57 @@ def get_tags_from_json(json_path):
     with open(json_path, "r") as json_file:
         json_data = json.load(json_file)
 
-    line = get_aesthetic_tag(json_data['aesthetic-shadow-v2'])
-    line += f", {get_quality_tag(json_data)}"
-    line += f", year {json_data['created_at'][:4]}"
+    if no_non_general_tags:
+        line = ""
+    else:
+        line = get_aesthetic_tag(json_data['aesthetic-shadow-v2'])
+        line += f", {get_quality_tag(json_data)}"
+        line += f", year {json_data['created_at'][:4]}"
 
     style_age_tag_added = False
     split_general_tags = json_data["tag_string_general"].split(" ")
     for style_age_tag in style_age_tags:
         if style_age_tag in split_general_tags:
             split_general_tags.pop(split_general_tags.index(style_age_tag))
-            if not style_age_tag_added and int(style_age_tag[:3]) < int(json_data['created_at'][:3]):
-                line += f", {style_age_tag[:4]}s (style)"
-                style_age_tag_added = True
-    if (not style_age_tag_added and json_data.get("style_age", "")
-        and (
-            int(json_data['style_age'][:3]) < int(json_data['created_at'][:3])
-            or ((2015 <= int(json_data['created_at'][:4]) < 2020) and int(json_data['style_age'][:4]) < 2015)
-        )
-    ):
-        line += f", {json_data['style_age'][:4]}s (style)"
+            if not no_non_general_tags:
+                if not style_age_tag_added and int(style_age_tag[:3]) < int(json_data['created_at'][:3]):
+                    line += f", {style_age_tag[:4]}s (style)"
+                    style_age_tag_added = True
+    if not no_non_general_tags:
+        if (
+            not style_age_tag_added and json_data.get("style_age", "") and (
+                int(json_data['style_age'][:3]) < int(json_data['created_at'][:3])
+                or ((2015 <= int(json_data['created_at'][:4]) < 2020) and int(json_data['style_age'][:4]) < 2015)
+            )
+        ):
+            line += f", {json_data['style_age'][:4]}s (style)"
 
     if json_data.get("special_tags", ""):
         for special_tag in json_data["special_tags"].split(" "):
             if special_tag:
                 line += f", {special_tag.replace('_', ' ')}"
 
-    for artist in json_data["tag_string_artist"].split(" "):
-        if artist:
-            line += f", art by {artist.replace('_', ' ')}"
+    if not no_non_general_tags:
+        for artist in json_data["tag_string_artist"].split(" "):
+            if artist:
+                line += f", art by {artist.replace('_', ' ')}"
 
-    split_meta_tags = json_data["tag_string_meta"].split(" ")
-    random.shuffle(split_meta_tags)
-    for medium_tag in json_data["tag_string_meta"].split(" "):
-        if medium_tag.endswith("_(medium)") and medium_tag != "photoshop_(medium)":
-            split_meta_tags.pop(split_meta_tags.index(medium_tag))
-            line += f", {medium_tag.replace('_', ' ')}"
+        split_meta_tags = json_data["tag_string_meta"].split(" ")
+        random.shuffle(split_meta_tags)
+        for medium_tag in json_data["tag_string_meta"].split(" "):
+            if medium_tag.endswith("_(medium)") and medium_tag != "photoshop_(medium)":
+                split_meta_tags.pop(split_meta_tags.index(medium_tag))
+                line += f", {medium_tag.replace('_', ' ')}"
 
-    rating = json_data.get("wd_rating", json_data["rating"])
-    if rating == "g":
-        line += ", sfw"
-    elif rating == "s":
-        line += ", suggestive"
-    elif rating == "q":
-        line += ", nsfw"
-    elif rating == "e":
-        line += ", explicit nsfw"
+        rating = json_data.get("wd_rating", json_data["rating"])
+        if rating == "g":
+            line += ", sfw"
+        elif rating == "s":
+            line += ", suggestive"
+        elif rating == "q":
+            line += ", nsfw"
+        elif rating == "e":
+            line += ", explicit nsfw"
 
     for no_shuffle_tag in no_shuffle_tags:
         if no_shuffle_tag in split_general_tags:
@@ -310,11 +317,13 @@ def get_tags_from_json(json_path):
         if tag:
             line += f", {tag.replace('_', ' ') if len(tag) > 3 else tag}"
 
-    if split_meta_tags:
+    if not no_non_general_tags and split_meta_tags:
         for meta_tag in split_meta_tags:
             if meta_tag and not any([bool(meta_tag_blacklist in meta_tag) for meta_tag_blacklist in meta_blacklist]):
                 line += f", {meta_tag.replace('_', ' ')}"
 
+    if no_non_general_tags:
+        line = line[2:]
     return line
 
 
