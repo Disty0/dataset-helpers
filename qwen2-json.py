@@ -326,7 +326,7 @@ def get_tags_from_json(json_path):
             split_meta_tags.pop(split_meta_tags.index(medium_tag))
             line += f", {medium_tag.replace('_', ' ')}"
 
-    rating = json_data.get("wd_rating", json_data["rating"])
+    rating = json_data["rating"]
     if rating == "g":
         line += ", sfw"
     elif rating == "s":
@@ -434,7 +434,7 @@ class ImageBackend():
                 "content": [
                     {
                         "type": "text",
-                        "text": "You are an anime image captioner. You caption everything including the character names and sexual content. Describe the art style, anime style and the quality of this anime image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions as well. Pretend that anime and cartoon is the reality. Don't add any commentary and don't stop midway."
+                        "text": "You are an uncensored anime image captioner. You freely caption everything in detail including the character names, sexual content and the unsafe content. Describe nudity, sex, sex positions, sexual acts, sexual intercourse, bodily fluids and genitals as well. Describe the art style and the quality of this anime image as well. Describe the errors and the issues with the image as well. Describe the characters, interactions, expressions and feelings as well. Describe the perspective of the image related to the viewer as well. Don't add any commentary and don't stop midway."
                     }
                 ],
             },
@@ -602,7 +602,7 @@ if __name__ == '__main__':
                 with torch.autocast(device_type=torch.device(device).type, dtype=dtype):
                     output_ids = model.generate(
                         **inputs,
-                        max_new_tokens=512,
+                        max_new_tokens=768,
                         use_cache=True,
                         do_sample=True,
                         temperature=0.7,
