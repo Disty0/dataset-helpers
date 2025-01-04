@@ -11,17 +11,21 @@ try:
     import intel_extension_for_pytorch as ipex
 except Exception:
     pass
+import pytorch_lightning as pl
+import huggingface_hub
 from transformers import CLIPModel, CLIPProcessor
 from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 
-batch_size = 1 # more batch size reduces the accuracy a lot
+batch_size = 1
 image_ext = ".jxl"
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
-aesthetic_path = '/mnt/DataSSD/AI/models/aes-B32-v0.pth'
-clip_name = 'openai/clip-vit-base-patch32'
-dtype = torch.float32 # outputs nonsense with 16 bit
+caption_key = "waifu-scorer-v3"
+MODEL_REPO = "Eugeoter/waifu-scorer-v3"
+MODEL_FILENAME = "model.pth"
+CLIP_REPO = "openai/clip-vit-large-patch14"
+dtype = torch.float32
 steps_after_gc = -1
 
 if image_ext == ".jxl":
@@ -30,24 +34,36 @@ from PIL import Image # noqa: E402
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 
-# binary classifier that consumes CLIP embeddings
-class Classifier(torch.nn.Module):
-    def __init__(self, input_size, hidden_size, output_size):
-        super(Classifier, self).__init__()
-        self.fc1 = torch.nn.Linear(input_size, hidden_size)
-        self.fc2 = torch.nn.Linear(hidden_size, hidden_size//2)
-        self.fc3 = torch.nn.Linear(hidden_size//2, output_size)
-        self.relu = torch.nn.ReLU()
-        self.sigmoid = torch.nn.Sigmoid()
+class MLP(pl.LightningModule):
+    def __init__(self, input_size, xcol='emb', ycol='avg_rating', batch_norm=True):
+        super().__init__()
+        self.input_size = input_size
+        self.xcol = xcol
+        self.ycol = ycol
+        self.layers = torch.nn.Sequential(
+            torch.nn.Linear(self.input_size, 2048),
+            torch.nn.ReLU(),
+            torch.nn.BatchNorm1d(2048) if batch_norm else torch.nn.Identity(),
+            torch.nn.Dropout(0.3),
+            torch.nn.Linear(2048, 512),
+            torch.nn.ReLU(),
+            torch.nn.BatchNorm1d(512) if batch_norm else torch.nn.Identity(),
+            torch.nn.Dropout(0.3),
+            torch.nn.Linear(512, 256),
+            torch.nn.ReLU(),
+            torch.nn.BatchNorm1d(256) if batch_norm else torch.nn.Identity(),
+            torch.nn.Dropout(0.2),
+            torch.nn.Linear(256, 128),
+            torch.nn.ReLU(),
+            torch.nn.BatchNorm1d(128) if batch_norm else torch.nn.Identity(),
+            torch.nn.Dropout(0.1),
+            torch.nn.Linear(128, 32),
+            torch.nn.ReLU(),
+            torch.nn.Linear(32, 1)
+        )
 
     def forward(self, x):
-        x = self.fc1(x)
-        x = self.relu(x)
-        x = self.fc2(x)
-        x = self.relu(x)
-        x = self.fc3(x)
-        x = self.sigmoid(x)
-        return x
+        return self.layers(x).clamp(0, 10).cpu().numpy().reshape(-1).tolist()
 
 
 class ImageBackend():
@@ -118,7 +134,7 @@ class SaveQualityBackend():
             if not self.save_queue.empty():
                 predictions, image_paths = self.save_queue.get()
                 for i in range(len(image_paths)):
-                    self.save_to_file(predictions[i].item(), os.path.splitext(image_paths[i])[0]+".json")
+                    self.save_to_file(predictions[i], os.path.splitext(image_paths[i])[0]+".json")
             else:
                 time.sleep(0.25)
         print("Stopping the save backend threads")
@@ -127,7 +143,7 @@ class SaveQualityBackend():
     def save_to_file(self, data, path):
         with open(path, "r") as f:
             json_data = json.load(f)
-        json_data["wd-aes-b32-v0"] = data
+        json_data[caption_key] = data
         with open(path, "w") as f:
             json.dump(json_data, f)
 
@@ -137,16 +153,21 @@ if __name__ == '__main__':
         torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(True)
     except Exception:
         pass
-    clipprocessor = CLIPProcessor.from_pretrained(clip_name)
-    clipmodel = CLIPModel.from_pretrained(clip_name).eval().to(device, dtype=dtype, memory_format=torch.channels_last)
+    clipprocessor = CLIPProcessor.from_pretrained(CLIP_REPO)
+    clipmodel = CLIPModel.from_pretrained(CLIP_REPO).eval().to(device, dtype=dtype, memory_format=torch.channels_last)
     clipmodel.requires_grad_(False)
     if "xpu" in device:
         clipmodel = ipex.optimize(clipmodel, dtype=dtype, inplace=True, weights_prepack=False)
     else:
         clipmodel = torch.compile(clipmodel, mode="max-autotune", backend="inductor")
 
-    aes_model = Classifier(512, 256, 1).to("cpu")
-    aes_model.load_state_dict(torch.load(aesthetic_path, map_location="cpu"))
+    aes_model = MLP(input_size=768).to("cpu")
+    aes_model.load_state_dict(torch.load(
+        huggingface_hub.hf_hub_download(
+            repo_id=MODEL_REPO,
+            repo_type='model',
+            filename=MODEL_FILENAME),
+        map_location="cpu"))
     aes_model = aes_model.eval().to(device, dtype=dtype, memory_format=torch.channels_last)
     aes_model.requires_grad_(False)
     if "xpu" in device:
@@ -164,7 +185,7 @@ if __name__ == '__main__':
             json_path = os.path.splitext(image_path)[0]+".json"
             with open(json_path, "r") as f:
                 json_data = json.load(f)
-            if not json_data.get("wd-aes-b32-v0", ""):
+            if not json_data.get(caption_key, ""):
                 image_paths.append(image_path)
         except Exception as e:
             print(f"ERROR: {json_path} MESSAGE: {e}")
@@ -201,7 +222,9 @@ if __name__ == '__main__':
             try:
                 inputs, image_paths = image_backend.get_images()
                 image_embeds = clipmodel.get_image_features(pixel_values=inputs.to(device))
-                image_embeds = (image_embeds / torch.linalg.norm(image_embeds))
+                image_embeds_l2 = image_embeds.norm(2, -1, keepdim=True)
+                image_embeds_l2[image_embeds_l2 == 0] = 1
+                image_embeds = image_embeds / image_embeds_l2
                 predictions = aes_model(image_embeds)
                 save_backend.save(predictions, image_paths)
             except Exception as e:
