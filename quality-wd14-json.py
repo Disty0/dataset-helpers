@@ -17,7 +17,7 @@ from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 
-batch_size = 1 # more batch size reduces the accuracy a lot
+batch_size = 32
 image_ext = ".jxl"
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
 caption_key = "wd-aes-b32-v0"
@@ -209,7 +209,8 @@ if __name__ == '__main__':
             try:
                 inputs, image_paths = image_backend.get_images()
                 image_embeds = clipmodel.get_image_features(pixel_values=inputs.to(device))
-                image_embeds = (image_embeds / torch.linalg.norm(image_embeds))
+                for i in range(len(image_embeds)):
+                    image_embeds[i] = image_embeds[i] / torch.linalg.norm(image_embeds[i])
                 predictions = aes_model(image_embeds)
                 save_backend.save(predictions, image_paths)
             except Exception as e:
