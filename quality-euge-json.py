@@ -18,7 +18,7 @@ from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 
-batch_size = 1
+batch_size = 32
 image_ext = ".jxl"
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
 caption_key = "waifu-scorer-v3"
@@ -63,7 +63,8 @@ class MLP(pl.LightningModule):
         )
 
     def forward(self, x):
-        return self.layers(x).clamp(0, 10).cpu().numpy().reshape(-1).tolist()
+        out = self.layers(x).clamp(0, 10) / 10
+        return out.cpu().numpy().reshape(-1).tolist()
 
 
 class ImageBackend():
