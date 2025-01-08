@@ -11,7 +11,6 @@ try:
     import intel_extension_for_pytorch as ipex
 except Exception:
     pass
-import pytorch_lightning as pl
 import huggingface_hub
 from transformers import CLIPModel, CLIPProcessor
 from queue import Queue
@@ -21,11 +20,11 @@ from tqdm import tqdm
 batch_size = 32
 image_ext = ".jxl"
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
-caption_key = "waifu-scorer-v3"
-MODEL_REPO = "Eugeoter/waifu-scorer-v3"
-MODEL_FILENAME = "model.pth"
-CLIP_REPO = "openai/clip-vit-large-patch14"
-dtype = torch.float32
+caption_key = "wd-aes-b32-v0"
+MODEL_REPO = "hakurei/waifu-diffusion-v1-4"
+MODEL_FILENAME = "models/aes-B32-v0.pth"
+CLIP_REPO = "openai/clip-vit-base-patch32"
+dtype = torch.float32 # outputs nonsense with 16 bit
 steps_after_gc = -1
 
 if image_ext == ".jxl":
@@ -34,37 +33,24 @@ from PIL import Image # noqa: E402
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 
-class MLP(pl.LightningModule):
-    def __init__(self, input_size, xcol='emb', ycol='avg_rating', batch_norm=True):
-        super().__init__()
-        self.input_size = input_size
-        self.xcol = xcol
-        self.ycol = ycol
-        self.layers = torch.nn.Sequential(
-            torch.nn.Linear(self.input_size, 2048),
-            torch.nn.ReLU(),
-            torch.nn.BatchNorm1d(2048) if batch_norm else torch.nn.Identity(),
-            torch.nn.Dropout(0.3),
-            torch.nn.Linear(2048, 512),
-            torch.nn.ReLU(),
-            torch.nn.BatchNorm1d(512) if batch_norm else torch.nn.Identity(),
-            torch.nn.Dropout(0.3),
-            torch.nn.Linear(512, 256),
-            torch.nn.ReLU(),
-            torch.nn.BatchNorm1d(256) if batch_norm else torch.nn.Identity(),
-            torch.nn.Dropout(0.2),
-            torch.nn.Linear(256, 128),
-            torch.nn.ReLU(),
-            torch.nn.BatchNorm1d(128) if batch_norm else torch.nn.Identity(),
-            torch.nn.Dropout(0.1),
-            torch.nn.Linear(128, 32),
-            torch.nn.ReLU(),
-            torch.nn.Linear(32, 1)
-        )
+# binary classifier that consumes CLIP embeddings
+class Classifier(torch.nn.Module):
+    def __init__(self, input_size, hidden_size, output_size):
+        super(Classifier, self).__init__()
+        self.fc1 = torch.nn.Linear(input_size, hidden_size)
+        self.fc2 = torch.nn.Linear(hidden_size, hidden_size//2)
+        self.fc3 = torch.nn.Linear(hidden_size//2, output_size)
+        self.relu = torch.nn.ReLU()
+        self.sigmoid = torch.nn.Sigmoid()
 
     def forward(self, x):
-        out = self.layers(x).clamp(0, 10) / 10
-        return out.cpu().numpy().reshape(-1).tolist()
+        x = self.fc1(x)
+        x = self.relu(x)
+        x = self.fc2(x)
+        x = self.relu(x)
+        x = self.fc3(x)
+        x = self.sigmoid(x)
+        return x
 
 
 class ImageBackend():
@@ -135,7 +121,7 @@ class SaveQualityBackend():
             if not self.save_queue.empty():
                 predictions, image_paths = self.save_queue.get()
                 for i in range(len(image_paths)):
-                    self.save_to_file(predictions[i], os.path.splitext(image_paths[i])[0]+".json")
+                    self.save_to_file(predictions[i].item(), os.path.splitext(image_paths[i])[0]+".json")
             else:
                 time.sleep(0.25)
         print("Stopping the save backend threads")
@@ -162,7 +148,7 @@ if __name__ == '__main__':
     else:
         clipmodel = torch.compile(clipmodel, mode="max-autotune", backend="inductor")
 
-    aes_model = MLP(input_size=768).to("cpu")
+    aes_model = Classifier(512, 256, 1).to("cpu")
     aes_model.load_state_dict(torch.load(
         huggingface_hub.hf_hub_download(
             repo_id=MODEL_REPO,
@@ -186,7 +172,7 @@ if __name__ == '__main__':
             json_path = os.path.splitext(image_path)[0]+".json"
             with open(json_path, "r") as f:
                 json_data = json.load(f)
-            if not json_data.get(caption_key, ""):
+            if json_data.get(caption_key, None) is None:
                 image_paths.append(image_path)
         except Exception as e:
             print(f"ERROR: {json_path} MESSAGE: {e}")
@@ -223,9 +209,8 @@ if __name__ == '__main__':
             try:
                 inputs, image_paths = image_backend.get_images()
                 image_embeds = clipmodel.get_image_features(pixel_values=inputs.to(device))
-                image_embeds_l2 = image_embeds.norm(2, -1, keepdim=True)
-                image_embeds_l2[image_embeds_l2 == 0] = 1
-                image_embeds = image_embeds / image_embeds_l2
+                for i in range(len(image_embeds)):
+                    image_embeds[i] = image_embeds[i] / torch.linalg.norm(image_embeds[i])
                 predictions = aes_model(image_embeds)
                 save_backend.save(predictions, image_paths)
             except Exception as e:

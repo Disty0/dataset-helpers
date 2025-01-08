@@ -186,7 +186,7 @@ if __name__ == '__main__':
             json_path = os.path.splitext(image_path)[0]+".json"
             with open(json_path, "r") as json_file:
                 json_data = json.load(json_file)
-            if not json_data.get(MODEL_NAME, ""):
+            if json_data.get(MODEL_NAME, None) is None:
                 image_paths.append(image_path)
         except Exception as e:
             print(f"ERROR: {json_path} MESSAGE: {e}")

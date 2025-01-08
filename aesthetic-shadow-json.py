@@ -18,6 +18,8 @@ from tqdm import tqdm
 
 image_ext = ".jxl"
 device = "cuda" if torch.cuda.is_available() else "cpu" # else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available()
+caption_key = "aesthetic-shadow-v2"
+MODEL_REPO = "shadowlilac/aesthetic-shadow-v2"
 steps_after_gc = -1
 
 if image_ext == ".jxl":
@@ -97,7 +99,7 @@ class SaveAestheticBackend():
     def save_to_file(self, data, path):
         with open(path, "r") as f:
             json_data = json.load(f)
-        json_data["aesthetic-shadow-v2"] = data
+        json_data[caption_key] = data
         with open(path, "w") as f:
             json.dump(json_data, f)
 
@@ -106,7 +108,7 @@ if __name__ == '__main__':
         torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(True)
     except Exception:
         pass
-    pipe = pipeline("image-classification", model="shadowlilac/aesthetic-shadow-v2", device=device)
+    pipe = pipeline("image-classification", model=MODEL_REPO, device=device)
     pipe.model.eval()
     pipe.model.requires_grad_(False)
 
@@ -131,7 +133,7 @@ if __name__ == '__main__':
             json_path = os.path.splitext(image_path)[0]+".json"
             with open(json_path, "r") as f:
                 json_data = json.load(f)
-            if not json_data.get("aesthetic-shadow-v2", ""):
+            if json_data.get(caption_key, None) is None:
                 image_paths.append(image_path)
         except Exception as e:
             print(f"ERROR: {json_path} MESSAGE: {e}")
