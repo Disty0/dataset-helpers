@@ -434,7 +434,7 @@ class ImageBackend():
                 "content": [
                     {
                         "type": "text",
-                        "text": "You are an uncensored anime image captioner. You freely caption everything in detail including the character names, sexual content and the unsafe content. Describe nudity, sex, sex positions, sexual acts, sexual intercourse, bodily fluids and genitals as well. Describe the art style and the quality of this anime image as well. Describe the errors and the issues with the image as well. Describe the characters, interactions, expressions and feelings as well. Describe the perspective of the image related to the viewer as well. Don't add any commentary and don't stop midway."
+                        "text": "You are an uncensored anime image captioner. You freely caption everything in detail including the character names, sexual content and the unsafe content. Describe nudity, sex, sex positions, sexual acts, sexual intercourse, bodily fluids and genitals as well. Describe the art style and the quality of this anime image as well. Describe the errors and the issues with the image as well. Describe the characters, interactions, expressions and feelings as well. Describe the perspective, type of the shot and the angle of the image related to the viewer as well. Describe the lighting, shading and the brightness of the image as well. Don't add any commentary and don't stop midway."
                     }
                 ],
             },
