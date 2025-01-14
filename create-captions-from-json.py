@@ -77,6 +77,7 @@ cleanup_caption_list = [
     ["Describe this anime", ""],
     ["Describe\nassistant", "\n"],
     ["\nassistant\n", "\n"],
+    ['," ', '", '],
     [",.", "."],
     [" ,", ","],
     [" .", "."],

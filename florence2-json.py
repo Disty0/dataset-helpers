@@ -153,7 +153,7 @@ quality_score_to_tag = {
 
 
 aes_score_to_tag = {
-    6: "extremely aesthetic",
+    6: "very aesthetic", # less than 1000 images are able to get this score when using multiple aes models
     5: "very aesthetic",
     4: "highly aesthetic",
     3: "moderate aesthetic",
