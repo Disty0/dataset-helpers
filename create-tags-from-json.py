@@ -175,7 +175,7 @@ def get_aesthetic_tag(json_data):
         scores.append(json_data["waifu-scorer-v3"])
         score_dicts.append(aes_euge_scores)
     if len(scores) == 1:
-        print(f"Using only 1 AES score! ID: {json_data.get("id", "none")}")
+        print(f"Using only 1 AES score! ID: {json_data.get('id', 'none')}")
         aes_score = get_aes_score(scores[0], score_dicts[0])
     else:
         aes_score = get_combined_aes_score(scores, score_dicts)
