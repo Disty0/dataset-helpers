@@ -92,39 +92,17 @@ no_shuffle_tags = [
 
 
 danbooru_quality_scores = {
-    "g": {
-        1: 1,
-        2: 3,
-        3: 7,
-        4: 15,
-        5: 23,
-        6: 35,
-    },
-    "s": {
-        1: 4,
-        2: 8,
-        3: 16,
-        4: 32,
-        5: 48,
-        6: 80,
-    },
-    "q": {
-        1: 8,
-        2: 12,
-        3: 24,
-        4: 48,
-        5: 80,
-        6: 136,
-    },
-    "e": {
-        1: 12,
-        2: 24,
-        3: 50,
-        4: 100,
-        5: 160,
-        6: 240,
-    },
+    "g": {6: 50, 5: 30, 4: 20, 3: 10, 2: 5, 1: 1},
+    "s": {6: 150, 5: 80, 4: 50, 3: 20, 2: 10, 1: 5},
+    "q": {6: 300, 5: 200, 4: 100, 3: 50, 2: 25, 1: 10},
+    "e": {6: 420, 5: 280, 4: 180, 3: 100, 2: 50, 1: 25}
 }
+
+
+aes_wd14_scores = {6: 0.999666, 5: 0.9983, 4: 0.992, 3: 0.50, 2: 0.016, 1: 0.0002}
+aes_shadow_scores = {6: 0.938, 5: 0.925, 4: 0.911, 3: 0.875, 2: 0.825, 1: 0.750}
+aes_deepghs_scores = {6: 0.962, 5: 0.890, 4: 0.786, 3: 0.585, 2: 0.388, 1: 0.192}
+aes_euge_scores = {6: 0.8396, 5: 0.7405, 4: 0.6942, 3: 0.3698, 2: 0.2940, 1: 0.1569}
 
 
 quality_score_to_tag = {
@@ -138,64 +116,69 @@ quality_score_to_tag = {
 }
 
 
-def get_quality_score_from_rating(score, rating):
-    if score > danbooru_quality_scores[rating][6]:
-        return 6
-    elif score > danbooru_quality_scores[rating][5]:
-        return 5
-    elif score > danbooru_quality_scores[rating][4]:
-        return 4
-    elif score > danbooru_quality_scores[rating][3]:
-        return 3
-    elif score > danbooru_quality_scores[rating][2]:
-        return 2
-    elif score > danbooru_quality_scores[rating][1]:
-        return 1
-    else:
-        return 0
+aes_score_to_tag = {
+    6: "extremely aesthetic",
+    5: "very aesthetic",
+    4: "highly aesthetic",
+    3: "moderate aesthetic",
+    2: "low aesthetic",
+    1: "bad aesthetic",
+    0: "worst aesthetic",
+}
 
 
-def get_quality_tag_from_wd(score):
-    if score > 0.97:
-        return 6
-    elif score > 0.92:
-        return 5
-    elif score > 0.75:
-        return 4
-    elif score > 0.30:
-        return 3
-    elif score > 0.08:
-        return 2
-    elif score > 0.01:
-        return 1
-    else:
-        return 0
+def get_aes_score(score, score_dict):
+    for i in reversed(range(6)):
+        if score > score_dict[i+1]:
+            return i+1
+    return 0
+
+
+def get_combined_aes_score(scores, score_dicts):
+    combined_score = 0
+    for score in scores:
+        combined_score += score
+    combined_score_dict = {6:0, 5:0, 4:0, 3:0, 2:0, 1:0}
+    for score_dict in score_dicts:
+        for key, score in score_dict.items():
+            combined_score_dict[key] += score
+    return get_aes_score(combined_score, combined_score_dict)
 
 
 def get_quality_tag(json_data):
-    if json_data.get("score", None) is not None:
-        quality_score = get_quality_score_from_rating(json_data.get("fav_count", json_data["score"]), json_data.get("wd_rating", json_data["rating"]))
+    if json_data.get("fav_count", None) is not None or json_data.get("score", None) is not None:
+        quality_score = get_aes_score(
+            json_data.get("fav_count", json_data["score"]),
+            danbooru_quality_scores[json_data.get("wd_rating", json_data["rating"])]
+        )
         if int(json_data["id"]) > 7000000:
-            wd_quality_score = get_quality_tag_from_wd(json_data.get("wd-aes-b32-v0", 0))
+            wd_quality_score = get_aes_score(json_data.get("swinv2pv3_v0_448_ls0.2_x_percentile", 0), aes_deepghs_scores)
             quality_score = max(quality_score, wd_quality_score)
     else:
-        quality_score = get_quality_tag_from_wd(json_data.get("wd-aes-b32-v0", 0))
+        quality_score = get_aes_score(json_data["swinv2pv3_v0_448_ls0.2_x_percentile"], aes_deepghs_scores)
     return quality_score_to_tag[quality_score]
 
 
-def get_aesthetic_tag(score):
-    if score > 0.925:
-        return "very aesthetic"
-    elif score > 0.90:
-        return "highly aesthetic"
-    elif score > 0.875:
-        return "slightly aesthetic"
-    elif score > 0.825:
-        return "moderate aesthetic"
-    elif score > 0.725:
-        return "not aesthetic"
+def get_aesthetic_tag(json_data):
+    scores = []
+    score_dicts = []
+    if json_data.get("wd-aes-b32-v0", None) is not None:
+        scores.append(json_data["wd-aes-b32-v0"])
+        score_dicts.append(aes_wd14_scores)
+    if json_data.get("aesthetic-shadow-v2", None) is not None:
+        scores.append(json_data["aesthetic-shadow-v2"])
+        score_dicts.append(aes_shadow_scores)
+    if json_data.get("swinv2pv3_v0_448_ls0.2_x_percentile", None) is not None:
+        scores.append(json_data["swinv2pv3_v0_448_ls0.2_x_percentile"])
+        score_dicts.append(aes_deepghs_scores)
+    if json_data.get("waifu-scorer-v3", None) is not None:
+        scores.append(json_data["waifu-scorer-v3"])
+        score_dicts.append(aes_euge_scores)
+    if len(scores) == 1:
+        aes_score = get_aes_score(scores[0], score_dicts[0])
     else:
-        return "bad aesthetic"
+        aes_score = get_combined_aes_score(scores, score_dicts)
+    return aes_score_to_tag[aes_score]
 
 
 def dedupe_tags(split_tags):
@@ -243,7 +226,7 @@ def get_tags_from_json(json_path):
     if no_non_general_tags:
         line = ""
     else:
-        line = get_aesthetic_tag(json_data['aesthetic-shadow-v2'])
+        line = get_aesthetic_tag(json_data)
         line += f", {get_quality_tag(json_data)}"
         line += f", year {json_data['created_at'][:4]}"
 
@@ -284,13 +267,13 @@ def get_tags_from_json(json_path):
 
         rating = json_data.get("wd_rating", json_data["rating"])
         if rating == "g":
-            line += ", sfw"
+            line += ", sfw rating"
         elif rating == "s":
-            line += ", suggestive"
+            line += ", suggestive rating"
         elif rating == "q":
-            line += ", nsfw"
+            line += ", nsfw rating"
         elif rating == "e":
-            line += ", explicit nsfw"
+            line += ", explicit nsfw rating"
 
     for no_shuffle_tag in no_shuffle_tags:
         if no_shuffle_tag in split_general_tags:
