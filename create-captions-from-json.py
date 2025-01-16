@@ -26,10 +26,11 @@ cleanup_start_list = [
     ["a highly detailed, ", "a "],
     ["a highly detailed ", "a "],
     ["a high-quality, ", "a "],
-    ["a high-quality ", "a "],
+    ["a high-quality ", "a "], # qwen2 slaps high-quality to everything even if it detects and captions quality issues correctly
     ["an anime image featuring ", ""],
     ["a anime image featuring ", ""],
     ["a anime", "an anime"],
+    ["a aesthetic", "an aesthetic"],
     ["a explicit", "an explicit"],
 ]
 
@@ -78,6 +79,7 @@ cleanup_caption_list = [
     ["Describe\nassistant", "\n"],
     ["\nassistant\n", "\n"],
     ['," ', '", '],
+    ['." ', '". '],
     [",.", "."],
     [" ,", ","],
     [" .", "."],
