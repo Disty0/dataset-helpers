@@ -262,7 +262,10 @@ def get_tags_from_json(json_path):
 
     line = get_aesthetic_tag(json_data)
     line += f", {get_quality_tag(json_data)}"
-    line += f", year {json_data['created_at'][:4]}"
+    year_tag = str(json_data['created_at'][:4])
+    if year_tag == "2025": # not enough data
+        year_tag = "2024"
+    line += f", year {year_tag}"
 
     style_age_tag_added = False
     split_general_tags = json_data["tag_string_general"].split(" ")
