@@ -149,6 +149,7 @@ class SaveTagBackend():
             json_data["tag_string_artist"] = ""
             json_data["tag_string_meta"] = ""
             json_data["created_at"] = "none"
+            json_data["file_ext"] = image_ext[1:]
         json_data["wd_rating"] = rating
         json_data["wd_tag_string_character"] = character_strings
         json_data["wd_tag_string_general"] = sorted_general_strings
