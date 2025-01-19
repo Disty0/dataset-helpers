@@ -330,6 +330,9 @@ def get_tags_from_json(json_path):
             if wd_tag and wd_tag not in no_shuffle_tags and wd_tag not in style_age_tags and wd_tag not in split_general_tags:
                 split_general_tags.append(wd_tag)
 
+    if json_data.get("file_ext", "jpg") not in {"png", "jxl"} and os.path.getsize(os.path.splitext(json_path)[0]+image_ext) < 307200:
+        split_general_tags.append("compression_artifacts")
+
     for tag in dedupe_tags(split_general_tags):
         if tag:
             line += f", {tag.replace('_', ' ') if len(tag) > 3 else tag}"
