@@ -29,7 +29,6 @@ revision = "c06a5f02cc6071a5d65ee5d294cf3732d3097540"
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
 dtype = torch.float16 if "cuda" in device else torch.bfloat16 if "xpu" in device else torch.float32
 use_flash_atten = "cuda" in device
-steps_after_gc = -1
 
 if image_ext == ".jxl":
     import pillow_jxl # noqa: F401
@@ -447,7 +446,8 @@ class SaveCaptionBackend():
             json.dump(json_data, f)
 
 
-if __name__ == '__main__':
+def main():
+    steps_after_gc = -1
     try:
         torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(True)
     except Exception:
@@ -555,3 +555,6 @@ if __name__ == '__main__':
 
     atexit.unregister(exit_handler)
     exit_handler(image_backend, save_backend)
+
+if __name__ == '__main__':
+    main()

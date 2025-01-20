@@ -25,7 +25,6 @@ MODEL_REPO = "hakurei/waifu-diffusion-v1-4"
 MODEL_FILENAME = "models/aes-B32-v0.pth"
 CLIP_REPO = "openai/clip-vit-base-patch32"
 dtype = torch.float32 # outputs nonsense with 16 bit
-steps_after_gc = -1
 
 if image_ext == ".jxl":
     import pillow_jxl # noqa: F401
@@ -88,7 +87,7 @@ class ImageBackend():
                     image, image_path = self.load_from_file(batch)
                     images.append(image)
                     image_paths.append(image_path)
-                inputs = clipprocessor(images=images, return_tensors='pt')['pixel_values'].to(dtype=dtype, memory_format=torch.channels_last)
+                inputs = self.processor(images=images, return_tensors='pt')['pixel_values'].to(dtype=dtype, memory_format=torch.channels_last)
                 self.load_queue.put([inputs, image_paths])
                 self.load_queue_lenght += 1
             else:
@@ -135,7 +134,8 @@ class SaveQualityBackend():
             json.dump(json_data, f)
 
 
-if __name__ == '__main__':
+def main():
+    steps_after_gc = -1
     try:
         torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(True)
     except Exception:
@@ -228,3 +228,6 @@ if __name__ == '__main__':
 
     atexit.unregister(exit_handler)
     exit_handler(image_backend, save_backend)
+
+if __name__ == '__main__':
+    main()

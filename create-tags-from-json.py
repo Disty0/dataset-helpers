@@ -14,7 +14,6 @@ from concurrent.futures import ThreadPoolExecutor
 
 image_ext = ".jxl"
 out_path = ""
-steps_after_gc = 0
 no_non_general_tags = False
 
 
@@ -350,7 +349,8 @@ class SaveTagBackend():
         caption_file.close()
 
 
-if __name__ == '__main__':
+def main():
+    steps_after_gc = 0
     print(f"Searching for {image_ext} files...")
     file_list = glob.glob(f'**/*{image_ext}')
 
@@ -382,3 +382,6 @@ if __name__ == '__main__':
 
     atexit.unregister(exit_handler)
     exit_handler(save_backend)
+
+if __name__ == '__main__':
+    main()

@@ -21,7 +21,6 @@ MODEL_NAME = "swinv2pv3_v0_448_ls0.2_x"
 MODEL_FILENAME = "model.onnx"
 LABEL_FILENAME = "meta.json"
 SAMPLES_FILENAME = "samples.csv"
-steps_after_gc = -1
 
 if image_ext == ".jxl":
     import pillow_jxl # noqa: F401
@@ -132,7 +131,8 @@ class SaveTagBackend():
         return [max(values, key=values.get), 1-percentile]
 
 
-if __name__ == '__main__':
+def main():
+    steps_after_gc = -1
     model_config_path = huggingface_hub.hf_hub_download(
         repo_id=MODEL_REPO,
         repo_type='model',
@@ -235,3 +235,6 @@ if __name__ == '__main__':
 
     atexit.unregister(exit_handler)
     exit_handler(image_backend, save_backend)
+
+if __name__ == '__main__':
+    main()

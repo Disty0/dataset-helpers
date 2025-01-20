@@ -15,7 +15,6 @@ image_ext = ".jxl"
 caption_key = "qwen2-vl-7b-captioner-relaxed"
 #caption_key = "florence-2-base-promptgen-v1-5"
 out_path = ""
-steps_after_gc = 0
 
 
 cleanup_start_list = [
@@ -249,7 +248,8 @@ class SaveTagBackend():
         caption_file.close()
 
 
-if __name__ == '__main__':
+def main():
+    steps_after_gc = 0
     print(f"Searching for {image_ext} files...")
     file_list = glob.glob(f'**/*{image_ext}')
 
@@ -281,3 +281,6 @@ if __name__ == '__main__':
 
     atexit.unregister(exit_handler)
     exit_handler(save_backend)
+
+if __name__ == '__main__':
+    main()

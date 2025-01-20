@@ -10,10 +10,13 @@ import atexit
 import random
 import torch
 try:
-    #import intel_extension_for_pytorch as ipex
-    import ipex_llm
+    use_ipex_llm = False
+    if use_ipex_llm:
+        import ipex_llm
+    else:
+        import intel_extension_for_pytorch as ipex # noqa: F401
 except Exception:
-    pass
+    use_ipex_llm = False
 from queue import Queue
 from transformers import Qwen2VLForConditionalGeneration, AutoProcessor, LogitsProcessor
 from concurrent.futures import ThreadPoolExecutor
@@ -24,9 +27,8 @@ image_ext = ".jxl"
 max_image_size = 1048576 # 1024x1024
 model_id = "Ertugrul/Qwen2-VL-7B-Captioner-Relaxed"
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
-dtype = torch.bfloat16 if "xpu" not in device else torch.float16
+dtype = torch.bfloat16 if not use_ipex_llm else torch.float16
 use_flash_atten = "cuda" in device and torch.version.cuda
-steps_after_gc = -1
 
 if image_ext == ".jxl":
     import pillow_jxl # noqa: F401
@@ -360,7 +362,7 @@ def get_tags_from_json(json_path):
 
 
 class ImageBackend():
-    def __init__(self, batches, processor, load_queue_lenght=32, max_load_workers=4):
+    def __init__(self, batches, processor, load_queue_lenght=32, max_load_workers=1):
         self.load_queue_lenght = 0
         self.keep_loading = True
         self.batches = Queue()
@@ -513,7 +515,9 @@ class UncensorQwen2(LogitsProcessor):
         return scores
 
 
-if __name__ == '__main__':
+def main():
+    steps_after_gc = -1
+    global input_ids_len, copyright_tags, processor
     try:
         torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(True)
     except Exception:
@@ -521,8 +525,8 @@ if __name__ == '__main__':
     processor = AutoProcessor.from_pretrained(model_id)
     logits_processor = UncensorQwen2()
     model = Qwen2VLForConditionalGeneration.from_pretrained(
-        model_id, torch_dtype=dtype, device_map=device if "xpu" not in device else "cpu",
-        attn_implementation="flash_attention_2" if use_flash_atten else None,
+        model_id, torch_dtype=dtype, device_map=device if not use_ipex_llm else "cpu",
+        attn_implementation="flash_attention_2" if use_flash_atten else "sdpa",
     ).to(dtype=dtype).eval()
     model.requires_grad_(False)
     model.visual.eval()
@@ -530,10 +534,10 @@ if __name__ == '__main__':
     model.model.eval()
     model.model.requires_grad_(False)
 
-    if "xpu" in device:
+    if use_ipex_llm:
         model = ipex_llm.optimize_model(model, low_bit="sym_int8")
         model = model.to(device)
-    else:
+    elif "xpu" not in device:
         #torch.cuda.tunable.enable(val=True) # tunableops causes nonsense outputs
         #torch.set_float32_matmul_precision('high')
         torch.compiler.cudagraph_mark_step_begin()
@@ -610,7 +614,7 @@ if __name__ == '__main__':
                 error_file.write(f"ERROR: {image_paths} MESSAGE: {e} \n")
                 error_file.close()
             steps_after_gc = steps_after_gc + 1
-            if steps_after_gc == 0 or steps_after_gc >= 16 if "xpu" not in device else 1:
+            if steps_after_gc == 0 or steps_after_gc >= 16:
                 gc.collect()
                 if "cpu" not in device:
                     getattr(torch, torch.device(device).type).synchronize()
@@ -619,3 +623,6 @@ if __name__ == '__main__':
 
     atexit.unregister(exit_handler)
     exit_handler(image_backend, save_backend)
+
+if __name__ == '__main__':
+    main()

@@ -18,7 +18,6 @@ image_ext = ".jxl"
 model_repo = "deepghs/anime_style_ages"
 MODEL_FILENAME = "mobilenetv3_v0_dist/model.onnx"
 LABEL_FILENAME = "mobilenetv3_v0_dist/meta.json"
-steps_after_gc = -1
 
 if image_ext == ".jxl":
     import pillow_jxl # noqa: F401
@@ -120,7 +119,8 @@ class SaveTagBackend():
         return max(values, key=values.get).replace("-", "")
 
 
-if __name__ == '__main__':
+def main():
+    steps_after_gc = -1
     model_config_path = huggingface_hub.hf_hub_download(
         model_repo,
         LABEL_FILENAME,
@@ -209,3 +209,6 @@ if __name__ == '__main__':
 
     atexit.unregister(exit_handler)
     exit_handler(image_backend, save_backend)
+
+if __name__ == '__main__':
+    main()

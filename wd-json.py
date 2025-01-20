@@ -21,7 +21,6 @@ character_thresh = 0.5
 model_repo = "SmilingWolf/wd-swinv2-tagger-v3"
 MODEL_FILENAME = "model.onnx"
 LABEL_FILENAME = "selected_tags.csv"
-steps_after_gc = -1
 
 if image_ext == ".jxl":
     import pillow_jxl # noqa: F401
@@ -197,7 +196,8 @@ class SaveTagBackend():
         return [rating, character_strings, sorted_general_strings]
 
 
-if __name__ == '__main__':
+def main():
+    steps_after_gc = -1
     csv_path = huggingface_hub.hf_hub_download(
         model_repo,
         LABEL_FILENAME,
@@ -299,3 +299,6 @@ if __name__ == '__main__':
 
     atexit.unregister(exit_handler)
     exit_handler(image_backend, save_backend)
+
+if __name__ == '__main__':
+    main()

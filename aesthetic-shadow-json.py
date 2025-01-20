@@ -20,7 +20,6 @@ image_ext = ".jxl"
 device = "cuda" if torch.cuda.is_available() else "cpu" # else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available()
 caption_key = "aesthetic-shadow-v2"
 MODEL_REPO = "shadowlilac/aesthetic-shadow-v2"
-steps_after_gc = -1
 
 if image_ext == ".jxl":
     import pillow_jxl # noqa: F401
@@ -103,7 +102,8 @@ class SaveAestheticBackend():
         with open(path, "w") as f:
             json.dump(json_data, f)
 
-if __name__ == '__main__':
+def main():
+    steps_after_gc = -1
     try:
         torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(True)
     except Exception:
@@ -180,3 +180,6 @@ if __name__ == '__main__':
 
     atexit.unregister(exit_handler)
     exit_handler(image_backend, save_backend)
+
+if __name__ == '__main__':
+    main()
