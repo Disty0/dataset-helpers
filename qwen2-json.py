@@ -601,6 +601,7 @@ def main():
                         do_sample=True,
                         temperature=0.7,
                         top_k=50,
+                        repetition_penalty=1.1,
                         logits_processor=[logits_processor],
                     )
                 generated_ids = [
