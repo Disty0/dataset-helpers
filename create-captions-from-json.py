@@ -85,6 +85,7 @@ cleanup_caption_list = [
     [",.", "."],
     [" ,", ","],
     [" .", "."],
+    ["\n ", "\n"],
     # qwen2
     #####################################################
     # florence2
@@ -209,6 +210,13 @@ def cleanup_caption(caption):
         while caption.endswith(old_tag):
             caption = caption.removesuffix(old_tag)
             caption = cleanup_whitespace(caption)
+    if " tag" in caption.lower() and len(caption.split('", ')) > 5:
+        caption = caption.replace('The image is tagged with ', '')
+        caption = caption.replace('", and "', ', ')
+        caption = caption.replace('" and "', ', ')
+        caption = caption.replace('"', '')
+        caption = caption.replace('\n ', '\n')
+        caption = cleanup_whitespace(caption)
     return caption
 
 

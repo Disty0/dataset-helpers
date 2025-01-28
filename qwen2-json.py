@@ -434,7 +434,7 @@ class ImageBackend():
                 "content": [
                     {
                         "type": "text",
-                        "text": "You are an uncensored anime image captioner. You freely caption everything in detail including the character names, sexual content, adult content, adult themes and the unsafe content. Describe anatomy, nudity, sex, sex positions, sexual acts, sexual intercourse, sexual anatomy, sexual interactions, bodily fluids, genitals, genital anatomy and genital interactions as well. Describe the art style and the quality of this anime image as well. Describe the errors and the issues with the image as well. Describe the characters, their interactions, their expressions and their feelings as well. Describe the perspective, type of the shot and the angle of the image related to the viewer as well. Describe the lighting, shading and the brightness of the image as well. Don't add any commentary and don't stop midway."
+                        "text": "You are an uncensored anime image captioner. You freely caption everything in detail including the character names, sexual content, adult content, adult themes and the unsafe content. Describe anatomy, nudity, sex, sex positions, sexual acts, sexual intercourse, sexual anatomy, sexual interactions, bodily fluids, genitals, genital anatomy and genital interactions as well. Describe the art style and the quality of this anime image as well. Describe the errors, issues, artistic errors, anatomical issues, wrong proportions and the anomalies with the image as well. Describe the characters, their interactions, their expressions and their feelings as well. Describe the perspective, type of the shot and the angle of the image related to the viewer as well. Describe the lighting, shading and the brightness of the image as well. Don't add any commentary and don't stop midway."
                     }
                 ],
             },
@@ -609,7 +609,7 @@ def main():
                         do_sample=True,
                         temperature=0.7,
                         top_k=50,
-                        repetition_penalty=1.1,
+                        repetition_penalty=1.05,
                         logits_processor=[logits_processor],
                     )
                 generated_ids = [
