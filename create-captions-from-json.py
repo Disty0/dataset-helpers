@@ -12,7 +12,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 image_ext = ".jxl"
-caption_key = "qwen2-vl-7b-captioner-relaxed"
+caption_key = "qwen2.5-vl-7b-instruct"
+#caption_key = "qwen2-vl-7b-captioner-relaxed"
 #caption_key = "florence-2-base-promptgen-v1-5"
 out_path = ""
 
@@ -26,6 +27,7 @@ cleanup_start_list = [
     ["a highly detailed ", "a "],
     ["a high-quality, ", "a "],
     ["a high-quality ", "a "], # qwen2 slaps high-quality to everything even if it detects and captions quality issues correctly
+    ["a and ", "a "],
     ["an anime image featuring ", ""],
     ["a anime image featuring ", ""],
     ["a anime", "an anime"],
@@ -77,6 +79,7 @@ cleanup_caption_list = [
     ["Describe this anime", ""],
     ["Describe\nassistant", "\n"],
     ["\nassistant\n", "\n"],
+    ["nsFW", "nsfw"],
     ['," ', '", '],
     ['." ', '". '],
     [",.", "."],

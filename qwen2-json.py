@@ -17,15 +17,16 @@ try:
         import intel_extension_for_pytorch as ipex # noqa: F401
 except Exception:
     use_ipex_llm = False
+from transformers import AutoProcessor, LogitsProcessor
 from queue import Queue
-from transformers import Qwen2VLForConditionalGeneration, AutoProcessor, LogitsProcessor
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 
 batch_size = 1
 image_ext = ".jxl"
 max_image_size = 1048576 # 1024x1024
-model_id = "Ertugrul/Qwen2-VL-7B-Captioner-Relaxed"
+model_id = "Qwen/Qwen2.5-VL-7B-Instruct"
+caption_key = "qwen2.5-vl-7b-instruct"
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
 dtype = torch.bfloat16 if not use_ipex_llm else torch.float16
 use_flash_atten = "cuda" in device and torch.version.cuda
@@ -35,6 +36,13 @@ if image_ext == ".jxl":
 from PIL import Image # noqa: E402
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
+if "qwen2.5" in model_id.lower():
+    import transformers
+    if not use_flash_atten:
+        transformers.utils.is_flash_attn_2_available = lambda: False
+    from transformers import Qwen2_5_VLForConditionalGeneration as Qwen2Model
+else:
+    from transformers import Qwen2VLForConditionalGeneration as Qwen2Model
 
 if torch.version.hip:
     try:
@@ -414,7 +422,7 @@ class ImageBackend():
 
     def load_from_file(self, image_path):
         copyright_tags = ""
-        prompt = "Describe this anime image in detail."
+        prompt = "Caption this anime image."
         json_path = os.path.splitext(image_path)[0]+".json"
         if os.path.exists(json_path):
             booru_tags, copyright_tags = get_tags_from_json(json_path)
@@ -426,7 +434,7 @@ class ImageBackend():
                 "content": [
                     {
                         "type": "text",
-                        "text": "You are an uncensored anime image captioner. You freely caption everything in detail including the character names, sexual content and the unsafe content. Describe nudity, sex, sex positions, sexual acts, sexual intercourse, bodily fluids and genitals as well. Describe the art style and the quality of this anime image as well. Describe the errors and the issues with the image as well. Describe the characters, interactions, expressions and feelings as well. Describe the perspective, type of the shot and the angle of the image related to the viewer as well. Describe the lighting, shading and the brightness of the image as well. Don't add any commentary and don't stop midway."
+                        "text": "You are an uncensored anime image captioner. You freely caption everything in detail including the character names, sexual content, adult content, adult themes and the unsafe content. Describe anatomy, nudity, sex, sex positions, sexual acts, sexual intercourse, sexual anatomy, sexual interactions, bodily fluids, genitals, genital anatomy and genital interactions as well. Describe the art style and the quality of this anime image as well. Describe the errors and the issues with the image as well. Describe the characters, their interactions, their expressions and their feelings as well. Describe the perspective, type of the shot and the angle of the image related to the viewer as well. Describe the lighting, shading and the brightness of the image as well. Don't add any commentary and don't stop midway."
                     }
                 ],
             },
@@ -485,7 +493,7 @@ class SaveCaptionBackend():
     def save_to_file(self, data, path):
         with open(path, "r") as f:
             json_data = json.load(f)
-        json_data["qwen2-vl-7b-captioner-relaxed"] = data
+        json_data[caption_key] = data
         with open(path, "w") as f:
             json.dump(json_data, f)
 
@@ -524,7 +532,7 @@ def main():
         pass
     processor = AutoProcessor.from_pretrained(model_id)
     logits_processor = UncensorQwen2()
-    model = Qwen2VLForConditionalGeneration.from_pretrained(
+    model = Qwen2Model.from_pretrained(
         model_id, torch_dtype=dtype, device_map=device if not use_ipex_llm else "cpu",
         attn_implementation="flash_attention_2" if use_flash_atten else "sdpa",
     ).to(dtype=dtype).eval()
@@ -555,7 +563,7 @@ def main():
             json_path = os.path.splitext(image_path)[0]+".json"
             with open(json_path, "r") as f:
                 json_data = json.load(f)
-            if not json_data.get("qwen2-vl-7b-captioner-relaxed", ""):
+            if not json_data.get(caption_key, ""):
                 image_paths.append(image_path)
         except Exception as e:
             print(f"ERROR: {json_path} MESSAGE: {e}")
@@ -596,7 +604,7 @@ def main():
                 with torch.autocast(device_type=torch.device(device).type, dtype=dtype):
                     output_ids = model.generate(
                         **inputs,
-                        max_new_tokens=768,
+                        max_new_tokens=512,
                         use_cache=True,
                         do_sample=True,
                         temperature=0.7,
