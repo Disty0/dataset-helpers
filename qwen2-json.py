@@ -287,8 +287,6 @@ def get_tags_from_json(json_path):
     line = get_aesthetic_tag(json_data)
     line += f", {get_quality_tag(json_data)}"
     year_tag = str(json_data['created_at'][:4])
-    if year_tag == "2025": # not enough data
-        year_tag = "2024"
     line += f", year {year_tag}"
 
     style_age_tag_added = False
@@ -545,6 +543,7 @@ def main():
     if use_ipex_llm:
         model = ipex_llm.optimize_model(model, low_bit="sym_int8")
         model = model.to(device)
+    """
     elif "xpu" not in device:
         #torch.cuda.tunable.enable(val=True) # tunableops causes nonsense outputs
         #torch.set_float32_matmul_precision('high')
@@ -552,6 +551,7 @@ def main():
         model.visual = torch.compile(model.visual, backend="inductor")
         torch.compiler.cudagraph_mark_step_begin()
         model.model = torch.compile(model.model, backend="inductor")
+    """
 
 
     print(f"Searching for {image_ext} files...")
