@@ -9,8 +9,9 @@ import atexit
 import torch
 try:
     import intel_extension_for_pytorch as ipex
+    ipex_available = True
 except Exception:
-    pass
+    ipex_available = False
 import huggingface_hub
 from transformers import CLIPModel, CLIPProcessor
 from queue import Queue
@@ -143,7 +144,7 @@ def main():
     clipprocessor = CLIPProcessor.from_pretrained(CLIP_REPO)
     clipmodel = CLIPModel.from_pretrained(CLIP_REPO).eval().to(device, dtype=dtype, memory_format=torch.channels_last)
     clipmodel.requires_grad_(False)
-    if "xpu" in device:
+    if "xpu" in device and ipex_available:
         clipmodel = ipex.optimize(clipmodel, dtype=dtype, inplace=True, weights_prepack=False)
     else:
         clipmodel = torch.compile(clipmodel, mode="max-autotune", backend="inductor")
@@ -157,7 +158,7 @@ def main():
         map_location="cpu"))
     aes_model = aes_model.eval().to(device, dtype=dtype, memory_format=torch.channels_last)
     aes_model.requires_grad_(False)
-    if "xpu" in device:
+    if "xpu" in device and ipex_available:
         aes_model = ipex.optimize(aes_model, dtype=dtype, inplace=True, weights_prepack=False)
     else:
         aes_model = torch.compile(aes_model, mode="max-autotune", backend="inductor")
