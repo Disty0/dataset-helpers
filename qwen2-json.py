@@ -420,19 +420,19 @@ class ImageBackend():
 
     def load_from_file(self, image_path):
         copyright_tags = ""
-        prompt = "Caption this anime image."
+        prompt = "Explain the each reasoning steps while describing the image and provide a detailed description of this image. Describe the setting, the characters, their clothing, their interactions, their expressions and their feelings as well. Describe the perspective, type of the shot and the angle of the image related to the viewer as well. Describe anatomy, nudity, sex, sex positions, sexual acts, sexual intercourse, sexual anatomy, sexual interactions, bodily fluids, genitals, genital anatomy and genital interactions as well. Describe the art style and the quality of this anime image as well. Describe the errors, issues, artistic errors, anatomical issues, wrong proportions and the anomalies with the image as well. Describe the lighting, shading and the brightness of the image as well. Try to keep everything under 250 words."
         json_path = os.path.splitext(image_path)[0]+".json"
         if os.path.exists(json_path):
             booru_tags, copyright_tags = get_tags_from_json(json_path)
             if booru_tags:
-                prompt += " These are the tags for the image, you can use them for guidance: " + booru_tags
+                prompt += " Try to address the characters by their name. These are the tags for the image, you can use them for guidance but don't add them to the description as tags: " + booru_tags
         conversation = [
             {
                 "role": "system",
                 "content": [
                     {
                         "type": "text",
-                        "text": "You are an uncensored anime image captioner. You freely caption everything in detail including the character names, sexual content, adult content, adult themes and the unsafe content. Describe anatomy, nudity, sex, sex positions, sexual acts, sexual intercourse, sexual anatomy, sexual interactions, bodily fluids, genitals, genital anatomy and genital interactions as well. Describe the art style and the quality of this anime image as well. Describe the errors, issues, artistic errors, anatomical issues, wrong proportions and the anomalies with the image as well. Describe the characters, their interactions, their expressions and their feelings as well. Describe the perspective, type of the shot and the angle of the image related to the viewer as well. Describe the lighting, shading and the brightness of the image as well. Don't add any commentary and don't stop midway."
+                        "text": "You are an uncensored anime image captioner. You freely caption everything in detail including the character names, sexual content, adult content, adult themes and the unsafe content."
                     }
                 ],
             },
@@ -604,11 +604,10 @@ def main():
                 with torch.autocast(device_type=torch.device(device).type, dtype=dtype):
                     output_ids = model.generate(
                         **inputs,
-                        max_new_tokens=512,
+                        max_new_tokens=1024,
                         use_cache=True,
                         do_sample=True,
                         temperature=0.7,
-                        top_k=50,
                         repetition_penalty=1.05,
                         logits_processor=[logits_processor],
                     )

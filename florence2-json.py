@@ -343,7 +343,7 @@ def get_tags_from_json(json_path):
 
 
 class ImageBackend():
-    def __init__(self, batches, processor, load_queue_lenght=32, max_load_workers=8):
+    def __init__(self, batches, processor, load_queue_lenght=32, max_load_workers=4):
         self.load_queue_lenght = 0
         self.keep_loading = True
         self.batches = Queue()

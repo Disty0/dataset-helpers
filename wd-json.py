@@ -37,7 +37,7 @@ rating_map = {
 
 
 class ImageBackend():
-    def __init__(self, batches, model_target_size, load_queue_lenght=256, max_load_workers=12):
+    def __init__(self, batches, model_target_size, load_queue_lenght=256, max_load_workers=4):
         self.load_queue_lenght = 0
         self.keep_loading = True
         self.batches = Queue()
