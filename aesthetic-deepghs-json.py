@@ -110,7 +110,7 @@ class SaveTagBackend():
         print("Stopping the save backend threads")
 
 
-    def save_to_file(self, data: float, path: str) -> None:
+    def save_to_file(self, data: Tuple[str, float], path: str) -> None:
         with open(path, "r") as json_file:
             json_data = json.load(json_file)
         json_data[MODEL_NAME] = data[0]
@@ -119,7 +119,7 @@ class SaveTagBackend():
             json.dump(json_data, f)
 
 
-    def get_tags(self, predictions: np.ndarray) -> float:
+    def get_tags(self, predictions: np.ndarray) -> Tuple[str, float]:
         values = dict(zip(self.model_config["labels"], map(lambda x: x.item(), predictions)))
         weighted_mean = sum(i * values[label] for i, label in enumerate(self.model_config["labels"]))
         idx = np.searchsorted(self.mark_table[0], np.clip(weighted_mean, a_min=0.0, a_max=6.0))
@@ -130,7 +130,7 @@ class SaveTagBackend():
 
         else:
             percentile = self.mark_table[1][idx]
-        return [max(values, key=values.get), 1-percentile]
+        return (max(values, key=values.get), 1-percentile)
 
 
 def main():

@@ -233,7 +233,7 @@ def main():
                 ["CPUExecutionProvider"]
             ),
         )
-    _, height, width, _ = model.get_inputs()[0].shape
+    _, height, _, _ = model.get_inputs()[0].shape
     model_target_size = height
 
     input_name = model.get_inputs()[0].name

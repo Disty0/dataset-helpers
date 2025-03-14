@@ -242,14 +242,13 @@ def get_tags_from_json(json_path: str) -> str:
                 if not style_age_tag_added and int(style_age_tag[:3]) < int(json_data['created_at'][:3]):
                     line += f", {style_age_tag[:4]}s (style)"
                     style_age_tag_added = True
-    if not no_non_general_tags:
-        if (
-            not style_age_tag_added and json_data.get("style_age", "") and (
-                int(json_data['style_age'][:3]) < int(json_data['created_at'][:3])
-                or ((2015 <= int(json_data['created_at'][:4]) < 2020) and int(json_data['style_age'][:4]) < 2015)
-            )
-        ):
-            line += f", {json_data['style_age'][:4]}s (style)"
+    if not no_non_general_tags and (
+        not style_age_tag_added and json_data.get("style_age", "") and (
+            int(json_data['style_age'][:3]) < int(json_data['created_at'][:3])
+            or ((2015 <= int(json_data['created_at'][:4]) < 2020) and int(json_data['style_age'][:4]) < 2015)
+        )
+    ):
+        line += f", {json_data['style_age'][:4]}s (style)"
 
     if json_data.get("special_tags", ""):
         for special_tag in json_data["special_tags"].split(" "):
