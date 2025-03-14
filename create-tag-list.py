@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 steps_after_gc = 0
 
-def write_tag(file_name):
+def write_tag(file_name: str) -> None:
     global tags_list, tags_file_list, words_list, txt_list
     caption_file = open(file_name, "r")
     tags = caption_file.readlines()[0].replace("\n", "")

@@ -14,6 +14,8 @@ from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 import onnxruntime as ort
 
+from typing import List, Tuple
+
 batch_size = 24
 image_ext = ".jxl"
 general_thresh = 0.35
@@ -37,7 +39,7 @@ rating_map = {
 
 
 class ImageBackend():
-    def __init__(self, batches, model_target_size, load_queue_lenght=256, max_load_workers=4):
+    def __init__(self, batches: List[List[str]], model_target_size: int, load_queue_lenght: int = 256, max_load_workers: int = 4):
         self.load_queue_lenght = 0
         self.keep_loading = True
         self.batches = Queue()
@@ -53,13 +55,13 @@ class ImageBackend():
             self.load_thread.submit(self.load_thread_func)
 
 
-    def get_images(self):
+    def get_images(self) -> Tuple[np.ndarray, List[str]]:
         result = self.load_queue.get()
         self.load_queue_lenght -= 1
         return result
 
 
-    def load_thread_func(self):
+    def load_thread_func(self) -> None:
         while self.keep_loading:
             if self.load_queue_lenght >= self.max_load_queue_lenght:
                 time.sleep(0.25)
@@ -70,14 +72,14 @@ class ImageBackend():
                     image = self.load_from_file(batch)
                     images.append(image)
                 images = np.array(images)
-                self.load_queue.put([images, batches])
+                self.load_queue.put((images, batches))
                 self.load_queue_lenght += 1
             else:
                 time.sleep(5)
         print("Stopping the image loader threads")
 
 
-    def load_from_file(self, image_path):
+    def load_from_file(self, image_path: str) -> np.ndarray:
         image = Image.open(image_path).convert("RGBA")
         background = Image.new('RGBA', image.size, (255, 255, 255))
         image = Image.alpha_composite(background, image).convert("RGB")
@@ -107,7 +109,7 @@ class ImageBackend():
 
 
 class SaveTagBackend():
-    def __init__(self, tag_names, rating_indexes, character_indexes, general_indexes, max_save_workers=2):
+    def __init__(self, tag_names: List[str], rating_indexes: List[int], character_indexes: List[int], general_indexes: List[int], max_save_workers: int = 2):
         self.tag_names = tag_names
         self.rating_indexes = rating_indexes
         self.character_indexes = character_indexes
@@ -119,11 +121,11 @@ class SaveTagBackend():
             self.save_thread.submit(self.save_thread_func)
 
 
-    def save(self, data, path):
-        self.save_queue.put([data,path])
+    def save(self, data: np.ndarray, path: List[str]) -> None:
+        self.save_queue.put((data,path))
 
 
-    def save_thread_func(self):
+    def save_thread_func(self) -> None:
         while self.keep_saving:
             if not self.save_queue.empty():
                 predictions, image_paths = self.save_queue.get()
@@ -134,7 +136,7 @@ class SaveTagBackend():
         print("Stopping the save backend threads")
 
 
-    def save_to_file(self, data, path):
+    def save_to_file(self, data: List[str], path: str) -> None:
         rating, character_strings, sorted_general_strings = data[0], data[1], data[2]
         if os.path.exists(path):
             with open(path, "r") as json_file:
@@ -157,7 +159,7 @@ class SaveTagBackend():
             json.dump(json_data, f)
 
 
-    def get_tags(self, predictions):
+    def get_tags(self, predictions: np.ndarray) -> Tuple[str, str, str]:
         labels = list(zip(self.tag_names, predictions.astype(float)))
 
         # First 4 labels are actually ratings: pick one with argmax
@@ -193,7 +195,7 @@ class SaveTagBackend():
         sorted_general_strings = [x[0] for x in sorted_general_strings]
         sorted_general_strings = " ".join(sorted_general_strings)
 
-        return [rating, character_strings, sorted_general_strings]
+        return (rating, character_strings, sorted_general_strings)
 
 
 def main():

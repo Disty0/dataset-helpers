@@ -11,13 +11,15 @@ from queue import Queue
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
 
+from typing import Dict, List
+
 
 image_ext = ".jxl"
 out_path = ""
 no_non_general_tags = False
 
 
-meta_blacklist = [
+meta_blacklist = (
     "highres",
     "source",
     "upload",
@@ -46,10 +48,10 @@ meta_blacklist = [
     "photoshop_(medium)",
     "spoilers",
     "commission",
-]
+)
 
 
-style_age_tags = [
+style_age_tags = (
     "1920s_(style)",
     "1930s_(style)",
     "1950s_(style)",
@@ -61,10 +63,10 @@ style_age_tags = [
     "2010s_(style)",
     "2015s_(style)",
     "2020s_(style)",
-]
+)
 
 
-no_shuffle_tags = [
+no_shuffle_tags = (
     "1girl",
     "2girls",
     "3girls",
@@ -87,7 +89,7 @@ no_shuffle_tags = [
     "5others",
     "6+others",
     "multiple_others",
-]
+)
 
 
 danbooru_quality_scores = {
@@ -126,14 +128,14 @@ aes_score_to_tag = {
 }
 
 
-def get_aes_score(score, score_dict):
+def get_aes_score(score: int, score_dict: Dict[int, int]) -> int:
     for i in reversed(range(6)):
         if score > score_dict[i+1]:
             return i+1
     return 0
 
 
-def get_combined_aes_score(scores, score_dicts):
+def get_combined_aes_score(scores: List[int], score_dicts: List[Dict[int, int]]) -> int:
     combined_score = 0
     for score in scores:
         combined_score += score
@@ -144,21 +146,7 @@ def get_combined_aes_score(scores, score_dicts):
     return get_aes_score(combined_score, combined_score_dict)
 
 
-def get_quality_tag(json_data):
-    if json_data.get("fav_count", None) is not None or json_data.get("score", None) is not None:
-        quality_score = get_aes_score(
-            json_data.get("fav_count", json_data["score"]),
-            danbooru_quality_scores[json_data.get("wd_rating", json_data["rating"])]
-        )
-        if int(json_data["id"]) > 7000000:
-            wd_quality_score = get_aes_score(json_data.get("swinv2pv3_v0_448_ls0.2_x_percentile", 0), aes_deepghs_scores)
-            quality_score = max(quality_score, wd_quality_score)
-    else:
-        quality_score = get_aes_score(json_data["swinv2pv3_v0_448_ls0.2_x_percentile"], aes_deepghs_scores)
-    return quality_score_to_tag[quality_score]
-
-
-def get_aesthetic_tag(json_data):
+def get_aesthetic_tag(json_data: Dict[str, int]) -> str:
     scores = []
     score_dicts = []
     if json_data.get("wd-aes-b32-v0", None) is not None:
@@ -181,7 +169,21 @@ def get_aesthetic_tag(json_data):
     return aes_score_to_tag[aes_score]
 
 
-def dedupe_tags(split_tags):
+def get_quality_tag(json_data: Dict[str, int]) -> str:
+    if json_data.get("fav_count", None) is not None or json_data.get("score", None) is not None:
+        quality_score = get_aes_score(
+            json_data.get("fav_count", json_data["score"]),
+            danbooru_quality_scores[json_data.get("wd_rating", json_data["rating"])]
+        )
+        if int(json_data["id"]) > 7000000:
+            wd_quality_score = get_aes_score(json_data.get("swinv2pv3_v0_448_ls0.2_x_percentile", 0), aes_deepghs_scores)
+            quality_score = max(quality_score, wd_quality_score)
+    else:
+        quality_score = get_aes_score(json_data["swinv2pv3_v0_448_ls0.2_x_percentile"], aes_deepghs_scores)
+    return quality_score_to_tag[quality_score]
+
+
+def dedupe_tags(split_tags: List[str]) -> List[str]:
     if len(split_tags) <= 1:
         return split_tags
     split_tags.sort(key=len, reverse=True)
@@ -196,7 +198,7 @@ def dedupe_tags(split_tags):
     return deduped_tags
 
 
-def dedupe_character_tags(split_tags):
+def dedupe_character_tags(split_tags: List[str]) -> List[str]:
     if len(split_tags) <= 1:
         return split_tags
     split_tags.sort(key=len, reverse=True)
@@ -219,7 +221,7 @@ def dedupe_character_tags(split_tags):
     return deduped_tags
 
 
-def get_tags_from_json(json_path):
+def get_tags_from_json(json_path: str) -> str:
     with open(json_path, "r") as json_file:
         json_data = json.load(json_file)
 
@@ -323,11 +325,11 @@ class SaveTagBackend():
             self.save_thread.submit(self.save_thread_func)
 
 
-    def save(self, data, path):
-        self.save_queue.put([data,path])
+    def save(self, data: str, path: str) -> None:
+        self.save_queue.put((data,path))
 
 
-    def save_thread_func(self):
+    def save_thread_func(self) -> None:
         while self.keep_saving:
             if not self.save_queue.empty():
                 data = self.save_queue.get()
@@ -337,7 +339,7 @@ class SaveTagBackend():
         print("Stopping the save backend threads")
 
 
-    def save_to_file(self, data, path):
+    def save_to_file(self, data: str, path: str) -> None:
         if out_path:
             os.makedirs(os.path.join(out_path, os.path.dirname(path)), exist_ok=True)
             caption_file = open(os.path.join(out_path, path), "w")

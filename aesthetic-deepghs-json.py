@@ -14,6 +14,8 @@ from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 import onnxruntime as ort
 
+from typing import List, Tuple
+
 batch_size = 32
 image_ext = ".jxl"
 MODEL_REPO = "deepghs/anime_aesthetic"
@@ -29,7 +31,7 @@ Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 
 class ImageBackend():
-    def __init__(self, batches, load_queue_lenght=256, max_load_workers=4):
+    def __init__(self, batches: List[List[str]], load_queue_lenght: int = 256, max_load_workers: int = 4):
         self.load_queue_lenght = 0
         self.keep_loading = True
         self.batches = Queue()
@@ -44,13 +46,13 @@ class ImageBackend():
             self.load_thread.submit(self.load_thread_func)
 
 
-    def get_images(self):
+    def get_images(self) -> Tuple[np.ndarray, List[str]]:
         result = self.load_queue.get()
         self.load_queue_lenght -= 1
         return result
 
 
-    def load_thread_func(self):
+    def load_thread_func(self) -> None:
         while self.keep_loading:
             if self.load_queue_lenght >= self.max_load_queue_lenght:
                 time.sleep(0.25)
@@ -61,14 +63,14 @@ class ImageBackend():
                     image = self.load_from_file(batch)
                     images.append(image)
                 images = np.array(images).astype(np.float32)
-                self.load_queue.put([images, batches])
+                self.load_queue.put((images, batches))
                 self.load_queue_lenght += 1
             else:
                 time.sleep(5)
         print("Stopping the image loader threads")
 
 
-    def load_from_file(self, image_path):
+    def load_from_file(self, image_path: str) -> np.ndarray:
         image = Image.open(image_path).convert("RGBA")
         background = Image.new('RGBA', image.size, (255, 255, 255))
         image = Image.alpha_composite(background, image).convert("RGB")
@@ -83,7 +85,7 @@ class ImageBackend():
 
 
 class SaveTagBackend():
-    def __init__(self, model_config, mark_table, max_save_workers=2):
+    def __init__(self, model_config: dict, mark_table: List[np.ndarray], max_save_workers: int = 2):
         self.model_config = model_config
         self.mark_table = mark_table
         self.keep_saving = True
@@ -93,11 +95,11 @@ class SaveTagBackend():
             self.save_thread.submit(self.save_thread_func)
 
 
-    def save(self, data, path):
-        self.save_queue.put([data,path])
+    def save(self, data: np.ndarray, path: List[str]) -> None:
+        self.save_queue.put((data,path))
 
 
-    def save_thread_func(self):
+    def save_thread_func(self) -> None:
         while self.keep_saving:
             if not self.save_queue.empty():
                 predictions, image_paths = self.save_queue.get()
@@ -108,7 +110,7 @@ class SaveTagBackend():
         print("Stopping the save backend threads")
 
 
-    def save_to_file(self, data, path):
+    def save_to_file(self, data: float, path: str) -> None:
         with open(path, "r") as json_file:
             json_data = json.load(json_file)
         json_data[MODEL_NAME] = data[0]
@@ -117,7 +119,7 @@ class SaveTagBackend():
             json.dump(json_data, f)
 
 
-    def get_tags(self, predictions):
+    def get_tags(self, predictions: np.ndarray) -> float:
         values = dict(zip(self.model_config["labels"], map(lambda x: x.item(), predictions)))
         weighted_mean = sum(i * values[label] for i, label in enumerate(self.model_config["labels"]))
         idx = np.searchsorted(self.mark_table[0], np.clip(weighted_mean, a_min=0.0, a_max=6.0))

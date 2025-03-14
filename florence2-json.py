@@ -21,6 +21,8 @@ from transformers import AutoModelForCausalLM, AutoProcessor
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 
+from typing import Dict, List, Tuple, Union
+
 batch_size = 8
 image_ext = ".jxl"
 caption_key = "florence-2-base-promptgen-v1-5"
@@ -54,7 +56,7 @@ if not use_flash_atten:
         pass
 
 
-meta_blacklist = [
+meta_blacklist = (
     "highres",
     "source",
     "upload",
@@ -69,6 +71,7 @@ meta_blacklist = [
     "_account",
     "_mismatch",
     "_sample",
+    "_file",
     "check_",
     "has_",
     "metadata",
@@ -82,10 +85,10 @@ meta_blacklist = [
     "photoshop_(medium)",
     "spoilers",
     "commission",
-]
+)
 
 
-style_age_tags = [
+style_age_tags = (
     "1920s_(style)",
     "1930s_(style)",
     "1950s_(style)",
@@ -97,10 +100,10 @@ style_age_tags = [
     "2010s_(style)",
     "2015s_(style)",
     "2020s_(style)",
-]
+)
 
 
-no_shuffle_tags = [
+no_shuffle_tags = (
     "1girl",
     "2girls",
     "3girls",
@@ -123,7 +126,7 @@ no_shuffle_tags = [
     "5others",
     "6+others",
     "multiple_others",
-]
+)
 
 
 danbooru_quality_scores = {
@@ -162,14 +165,14 @@ aes_score_to_tag = {
 }
 
 
-def get_aes_score(score, score_dict):
+def get_aes_score(score: int, score_dict: Dict[int, int]) -> int:
     for i in reversed(range(6)):
         if score > score_dict[i+1]:
             return i+1
     return 0
 
 
-def get_combined_aes_score(scores, score_dicts):
+def get_combined_aes_score(scores: List[int], score_dicts: List[Dict[int, int]]) -> int:
     combined_score = 0
     for score in scores:
         combined_score += score
@@ -180,21 +183,7 @@ def get_combined_aes_score(scores, score_dicts):
     return get_aes_score(combined_score, combined_score_dict)
 
 
-def get_quality_tag(json_data):
-    if json_data.get("fav_count", None) is not None or json_data.get("score", None) is not None:
-        quality_score = get_aes_score(
-            json_data.get("fav_count", json_data["score"]),
-            danbooru_quality_scores[json_data.get("wd_rating", json_data["rating"])]
-        )
-        if int(json_data["id"]) > 7000000:
-            wd_quality_score = get_aes_score(json_data.get("swinv2pv3_v0_448_ls0.2_x_percentile", 0), aes_deepghs_scores)
-            quality_score = max(quality_score, wd_quality_score)
-    else:
-        quality_score = get_aes_score(json_data["swinv2pv3_v0_448_ls0.2_x_percentile"], aes_deepghs_scores)
-    return quality_score_to_tag[quality_score]
-
-
-def get_aesthetic_tag(json_data):
+def get_aesthetic_tag(json_data: Dict[str, int]) -> str:
     scores = []
     score_dicts = []
     if json_data.get("wd-aes-b32-v0", None) is not None:
@@ -217,7 +206,21 @@ def get_aesthetic_tag(json_data):
     return aes_score_to_tag[aes_score]
 
 
-def dedupe_tags(split_tags):
+def get_quality_tag(json_data: Dict[str, int]) -> str:
+    if json_data.get("fav_count", None) is not None or json_data.get("score", None) is not None:
+        quality_score = get_aes_score(
+            json_data.get("fav_count", json_data["score"]),
+            danbooru_quality_scores[json_data.get("wd_rating", json_data["rating"])]
+        )
+        if int(json_data["id"]) > 7000000:
+            wd_quality_score = get_aes_score(json_data.get("swinv2pv3_v0_448_ls0.2_x_percentile", 0), aes_deepghs_scores)
+            quality_score = max(quality_score, wd_quality_score)
+    else:
+        quality_score = get_aes_score(json_data["swinv2pv3_v0_448_ls0.2_x_percentile"], aes_deepghs_scores)
+    return quality_score_to_tag[quality_score]
+
+
+def dedupe_tags(split_tags: List[str]) -> List[str]:
     if len(split_tags) <= 1:
         return split_tags
     split_tags.sort(key=len, reverse=True)
@@ -232,7 +235,7 @@ def dedupe_tags(split_tags):
     return deduped_tags
 
 
-def dedupe_character_tags(split_tags):
+def dedupe_character_tags(split_tags: List[str]) -> List[str]:
     if len(split_tags) <= 1:
         return split_tags
     split_tags.sort(key=len, reverse=True)
@@ -255,7 +258,7 @@ def dedupe_character_tags(split_tags):
     return deduped_tags
 
 
-def get_tags_from_json(json_path):
+def get_tags_from_json(json_path: str) -> str:
     with open(json_path, "r") as json_file:
         json_data = json.load(json_file)
 
@@ -343,7 +346,7 @@ def get_tags_from_json(json_path):
 
 
 class ImageBackend():
-    def __init__(self, batches, processor, load_queue_lenght=32, max_load_workers=4):
+    def __init__(self, batches: List[List[str]], processor: AutoProcessor, load_queue_lenght: int = 32, max_load_workers: int = 4):
         self.load_queue_lenght = 0
         self.keep_loading = True
         self.batches = Queue()
@@ -359,38 +362,36 @@ class ImageBackend():
             self.load_thread.submit(self.load_thread_func)
 
 
-    def get_images(self):
+    def get_images(self) -> Tuple[List[Dict[str, torch.Tensor]], List[str]]:
         result = self.load_queue.get()
         self.load_queue_lenght -= 1
         return result
 
 
-    def load_thread_func(self):
+    def load_thread_func(self) -> None:
         while self.keep_loading:
             if self.load_queue_lenght >= self.max_load_queue_lenght:
                 time.sleep(0.25)
             elif not self.batches.empty():
                 batches = self.batches.get()
                 images = []
-                image_paths = []
                 prompts = []
                 for batch in batches:
-                    image, image_path, prompt = self.load_from_file(batch)
+                    image, prompt = self.load_from_file(batch)
                     images.append(image)
-                    image_paths.append(image_path)
                     prompts.append(prompt)
                 inputs = self.processor(text=prompts, images=images, return_tensors="pt", padding="longest", max_length=769, truncation=True) # 769 = 577 image + 192 text. max_length > 769 is too slow.
                 attention_mask_image = torch.ones((inputs["attention_mask"].shape[0], 577), device=inputs["attention_mask"].device, dtype=inputs["attention_mask"].dtype)
                 inputs["attention_mask"] = torch.cat([attention_mask_image, inputs["attention_mask"]], dim=1) # add atten mask for the image
                 inputs["pixel_values"] = inputs["pixel_values"].to(dtype=dtype, memory_format=torch.channels_last)
-                self.load_queue.put([inputs, image_paths])
+                self.load_queue.put((inputs, batches))
                 self.load_queue_lenght += 1
             else:
                 time.sleep(5)
         print("Stopping the image loader threads")
 
 
-    def load_from_file(self, image_path):
+    def load_from_file(self, image_path: str) -> Tuple[Image.Image, str]:
         prompt = "Describe this anime image. Describe the overall art style and the quality of this anime image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions, intimacy, vulnerability and sensuality as well. Pretend that anime and cartoon is the reality. If you are not sure about something, then don't mention it."
         #prompt = "Describe this image. Describe the overall art style and the quality of this anime image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions, intimacy, vulnerability and sensuality as well. Pretend that anime and cartoon is the reality."
         #prompt = "Describe this image. Describe the overall art style and the quality of this image as well. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions, intimacy, vulnerability and sensuality as well. Pretend that anime and cartoon is the reality."
@@ -407,11 +408,11 @@ class ImageBackend():
         image = Image.open(image_path).convert("RGBA")
         background = Image.new('RGBA', image.size, (255, 255, 255))
         image = Image.alpha_composite(background, image).convert("RGB")
-        return [image, image_path, prompt]
+        return (image, prompt)
 
 
 class SaveCaptionBackend():
-    def __init__(self, processor, max_save_workers=2):
+    def __init__(self, processor: AutoProcessor, max_save_workers: int = 2):
         self.processor = processor
         self.keep_saving = True
         self.save_queue = Queue()
@@ -420,11 +421,11 @@ class SaveCaptionBackend():
             self.save_thread.submit(self.save_thread_func)
 
 
-    def save(self, generated_ids, image_paths):
-        self.save_queue.put([generated_ids, image_paths])
+    def save(self, generated_ids: Union[List[List[int]], torch.Tensor], image_paths: List[str]) -> None:
+        self.save_queue.put((generated_ids, image_paths))
 
 
-    def save_thread_func(self):
+    def save_thread_func(self) -> None:
         while self.keep_saving:
             if not self.save_queue.empty():
                 generated_ids, image_paths = self.save_queue.get()
@@ -436,7 +437,7 @@ class SaveCaptionBackend():
         print("Stopping the save backend threads")
 
 
-    def save_to_file(self, data, path):
+    def save_to_file(self, data: str, path: str) -> None:
         with open(path, "r") as f:
             json_data = json.load(f)
         json_data[caption_key] = data.split("\n", maxsplit=1)[0].replace("\r", "")

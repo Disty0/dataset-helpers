@@ -16,6 +16,8 @@ from concurrent.futures import ThreadPoolExecutor
 from transformers import pipeline
 from tqdm import tqdm
 
+from typing import List, Tuple
+
 image_ext = ".jxl"
 device = "cuda" if torch.cuda.is_available() else "cpu" # else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available()
 caption_key = "aesthetic-shadow-v2"
@@ -28,7 +30,7 @@ Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 
 class ImageBackend():
-    def __init__(self, batches, load_queue_lenght=128, max_load_workers=4):
+    def __init__(self, batches: List[str], load_queue_lenght: int = 128, max_load_workers: int = 4):
         self.load_queue_lenght = 0
         self.keep_loading = True
         self.batches = Queue()
@@ -43,13 +45,13 @@ class ImageBackend():
             self.load_thread.submit(self.load_thread_func)
 
 
-    def get_images(self):
+    def get_images(self) -> Tuple[Image.Image, str]:
         result = self.load_queue.get()
         self.load_queue_lenght -= 1
         return result
 
 
-    def load_thread_func(self):
+    def load_thread_func(self) -> None:
         while self.keep_loading:
             if self.load_queue_lenght >= self.max_load_queue_lenght:
                 time.sleep(0.1)
@@ -65,15 +67,15 @@ class ImageBackend():
         print("Stopping the image loader threads")
 
 
-    def load_from_file(self, image_path):
+    def load_from_file(self, image_path: str) -> Tuple[Image.Image, str]:
         image = Image.open(image_path).convert("RGBA")
         background = Image.new('RGBA', image.size, (255, 255, 255))
         image = Image.alpha_composite(background, image).convert("RGB")
-        return [image, image_path]
+        return (image, image_path)
 
 
 class SaveAestheticBackend():
-    def __init__(self, max_save_workers=2):
+    def __init__(self, max_save_workers: int = 2):
         self.keep_saving = True
         self.save_queue = Queue()
         self.save_thread = ThreadPoolExecutor(max_workers=max_save_workers)
@@ -81,11 +83,11 @@ class SaveAestheticBackend():
             self.save_thread.submit(self.save_thread_func)
 
 
-    def save(self, data, path):
-        self.save_queue.put([data,path])
+    def save(self, data: float, path: str) -> None:
+        self.save_queue.put((data,path))
 
 
-    def save_thread_func(self):
+    def save_thread_func(self) -> None:
         while self.keep_saving:
             if not self.save_queue.empty():
                 data = self.save_queue.get()
@@ -95,7 +97,7 @@ class SaveAestheticBackend():
         print("Stopping the save backend threads")
 
 
-    def save_to_file(self, data, path):
+    def save_to_file(self, data: float, path: str) -> None:
         with open(path, "r") as f:
             json_data = json.load(f)
         json_data[caption_key] = data

@@ -23,7 +23,7 @@ parser.add_argument('start', type=int)
 parser.add_argument('end', type=int)
 args = parser.parse_args()
 
-general_blacklist = [
+general_blacklist = (
     "comic",
     "text_focus",
     "realistic",
@@ -75,9 +75,9 @@ general_blacklist = [
     "extra_clitorises",
     "extra_chest",
     "extra_eyewear",
-]
+)
 
-meta_blacklist = [
+meta_blacklist = (
     "corrupted_file",
     "artifacts",
     "aliasing",
@@ -95,7 +95,7 @@ meta_blacklist = [
     "bad_aspect_ratio",
     "poorly_stitched",
     "photo_(medium)",
-]
+)
 
 
 for id in tqdm(range(args.start, args.end)):

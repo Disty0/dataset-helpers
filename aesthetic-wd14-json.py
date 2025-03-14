@@ -18,6 +18,8 @@ from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 
+from typing import List, Tuple
+
 batch_size = 32
 image_ext = ".jxl"
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
@@ -35,7 +37,7 @@ Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 # binary classifier that consumes CLIP embeddings
 class Classifier(torch.nn.Module):
-    def __init__(self, input_size, hidden_size, output_size):
+    def __init__(self, input_size: int, hidden_size: int, output_size: int):
         super(Classifier, self).__init__()
         self.fc1 = torch.nn.Linear(input_size, hidden_size)
         self.fc2 = torch.nn.Linear(hidden_size, hidden_size//2)
@@ -43,7 +45,7 @@ class Classifier(torch.nn.Module):
         self.relu = torch.nn.ReLU()
         self.sigmoid = torch.nn.Sigmoid()
 
-    def forward(self, x):
+    def forward(self, x: torch.FloatTensor) -> torch.FloatTensor:
         x = self.fc1(x)
         x = self.relu(x)
         x = self.fc2(x)
@@ -54,7 +56,7 @@ class Classifier(torch.nn.Module):
 
 
 class ImageBackend():
-    def __init__(self, batches, processor, load_queue_lenght=256, max_load_workers=4):
+    def __init__(self, batches: List[List[str]], processor: CLIPProcessor, load_queue_lenght: int = 256, max_load_workers: int = 4):
         self.load_queue_lenght = 0
         self.keep_loading = True
         self.batches = Queue()
@@ -70,41 +72,39 @@ class ImageBackend():
             self.load_thread.submit(self.load_thread_func)
 
 
-    def get_images(self):
+    def get_images(self) -> Tuple[torch.FloatTensor, List[str]]:
         result = self.load_queue.get()
         self.load_queue_lenght -= 1
         return result
 
 
-    def load_thread_func(self):
+    def load_thread_func(self) -> None:
         while self.keep_loading:
             if self.load_queue_lenght >= self.max_load_queue_lenght:
                 time.sleep(0.1)
             elif not self.batches.empty():
                 batches = self.batches.get()
                 images = []
-                image_paths = []
                 for batch in batches:
-                    image, image_path = self.load_from_file(batch)
+                    image = self.load_from_file(batch)
                     images.append(image)
-                    image_paths.append(image_path)
                 inputs = self.processor(images=images, return_tensors='pt')['pixel_values'].to(dtype=dtype, memory_format=torch.channels_last)
-                self.load_queue.put([inputs, image_paths])
+                self.load_queue.put((inputs, batches))
                 self.load_queue_lenght += 1
             else:
                 time.sleep(5)
         print("Stopping the image loader threads")
 
 
-    def load_from_file(self, image_path):
+    def load_from_file(self, image_path: str) -> Image.Image:
         image = Image.open(image_path).convert("RGBA")
         background = Image.new('RGBA', image.size, (255, 255, 255))
         image = Image.alpha_composite(background, image).convert("RGB")
-        return [image, image_path]
+        return image
 
 
 class SaveQualityBackend():
-    def __init__(self, max_save_workers=2):
+    def __init__(self, max_save_workers: int = 2):
         self.keep_saving = True
         self.save_queue = Queue()
         self.save_thread = ThreadPoolExecutor(max_workers=max_save_workers)
@@ -112,11 +112,11 @@ class SaveQualityBackend():
             self.save_thread.submit(self.save_thread_func)
 
 
-    def save(self, data, path):
-        self.save_queue.put([data,path])
+    def save(self, data: torch.FloatTensor, path: List[str]) -> None:
+        self.save_queue.put((data,path))
 
 
-    def save_thread_func(self):
+    def save_thread_func(self) -> None:
         while self.keep_saving:
             if not self.save_queue.empty():
                 predictions, image_paths = self.save_queue.get()
@@ -127,7 +127,7 @@ class SaveQualityBackend():
         print("Stopping the save backend threads")
 
 
-    def save_to_file(self, data, path):
+    def save_to_file(self, data: float, path: str):
         with open(path, "r") as f:
             json_data = json.load(f)
         json_data[caption_key] = data

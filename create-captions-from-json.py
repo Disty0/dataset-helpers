@@ -10,6 +10,7 @@ from queue import Queue
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
 
+from typing import Tuple
 
 image_ext = ".jxl"
 caption_key = "qwen2.5-vl-7b-instruct"
@@ -18,7 +19,7 @@ caption_key = "qwen2.5-vl-7b-instruct"
 out_path = ""
 
 
-cleanup_start_list = [
+cleanup_start_list = (
     ["This is", ""],
     ["This ", ""],
     ["a highly detailed, high-quality anime image featuring ", ""],
@@ -33,7 +34,7 @@ cleanup_start_list = [
     ["a anime", "an anime"],
     ["a aesthetic", "an aesthetic"],
     ["a explicit", "an explicit"],
-]
+)
 
 
 cleanup_end_list = [
@@ -57,9 +58,9 @@ cleanup_end_list = [
 ]
 cleanup_end_list.extend(cleanup_end_list)
 cleanup_end_list.extend(cleanup_end_list)
+cleanup_end_list = tuple(cleanup_end_list)
 
-
-cleanup_caption_list = [
+cleanup_caption_list = (
     [" Hatsune Maku, ", " Hatsune Miku, "],
     ["\"Vocaiol,\"", "\"Vocaloid,\""],
     ["Gensishn Impact", "Genshin Impact"],
@@ -108,10 +109,10 @@ cleanup_caption_list = [
     [" lively and lively", " lively"],
     [" allure and allure", " allure"],
     [" influence influence", " influence"],
-]
+)
 
 
-def cleanup_word_repeats(caption):
+def cleanup_word_repeats(caption: str) -> Tuple[str, str]:
     replace_words = None
     words = caption.split(" ")
     for i in range(len(words)):
@@ -137,7 +138,7 @@ def cleanup_word_repeats(caption):
         return caption, replace_string
 
 
-def cleanup_string_repeats(caption):
+def cleanup_string_repeats(caption: str) -> Tuple[str, str]:
     replace_string = None
     for i in range(len(caption)):
         if caption[-(2*i):-i] == caption[-i:]:
@@ -154,7 +155,7 @@ def cleanup_string_repeats(caption):
             return caption, ""
 
 
-def cleanup_word_repeats_recursive(caption):
+def cleanup_word_repeats_recursive(caption: str) -> str:
     caption, replace_words = cleanup_word_repeats(caption)
     if replace_words:
         caption = cleanup_repeats_recursive(caption)
@@ -163,7 +164,7 @@ def cleanup_word_repeats_recursive(caption):
     return caption
 
 
-def cleanup_repeats_recursive(caption):
+def cleanup_repeats_recursive(caption: str) -> str:
     caption = cleanup_word_repeats_recursive(caption)
     caption, replace_string0 = cleanup_string_repeats(caption)
     if replace_string0:
@@ -176,7 +177,7 @@ def cleanup_repeats_recursive(caption):
     return caption
     
 
-def cleanup_whitespace(caption):
+def cleanup_whitespace(caption: str) -> str:
     while caption[0] == ",":
         caption = caption[1:]
     while caption[0] == ".":
@@ -196,7 +197,7 @@ def cleanup_whitespace(caption):
     return caption
 
 
-def cleanup_caption(caption):
+def cleanup_caption(caption: str) -> str:
     caption = cleanup_repeats_recursive(caption)
     caption = cleanup_whitespace(caption)
     for old_tag, new_tag in cleanup_caption_list:
@@ -220,14 +221,14 @@ def cleanup_caption(caption):
     return caption
 
 
-def get_captions_from_json(json_path):
+def get_captions_from_json(json_path: str) -> str:
     with open(json_path, "r") as json_file:
         json_data = json.load(json_file)
     return cleanup_caption(json_data[caption_key])
 
 
 class SaveTagBackend():
-    def __init__(self, max_save_workers=8):
+    def __init__(self, max_save_workers: int = 8):
         self.keep_saving = True
         self.save_queue = Queue()
         self.save_thread = ThreadPoolExecutor(max_workers=max_save_workers)
@@ -235,11 +236,11 @@ class SaveTagBackend():
             self.save_thread.submit(self.save_thread_func)
 
 
-    def save(self, data, path):
-        self.save_queue.put([data,path])
+    def save(self, data: str, path: str) -> None:
+        self.save_queue.put((data,path))
 
 
-    def save_thread_func(self):
+    def save_thread_func(self) -> None:
         while self.keep_saving:
             if not self.save_queue.empty():
                 data = self.save_queue.get()
@@ -249,7 +250,7 @@ class SaveTagBackend():
         print("Stopping the save backend threads")
 
 
-    def save_to_file(self, data, path):
+    def save_to_file(self, data: str, path: str) -> None:
         if out_path:
             os.makedirs(os.path.join(out_path, os.path.dirname(path)), exist_ok=True)
             caption_file = open(os.path.join(out_path, path), "w")
