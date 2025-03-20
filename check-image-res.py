@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import os
-import math
 from glob import glob
 from tqdm import tqdm
 
@@ -9,7 +8,6 @@ from typing import List, Tuple
 
 image_ext = ".jxl"
 remove_files = False
-resize_files = False
 
 if image_ext == ".jxl":
     import pillow_jxl # noqa: F401
@@ -204,35 +202,22 @@ def get_jxl_size(path: str) -> Tuple[int,int]:
 file_list = glob(f"**/*{image_ext}")
 
 os.makedirs("out", exist_ok=True)
-small_file = open("out/small.txt", 'a')
-big_file = open("out/big.txt", 'a')
+small_res_file = open("out/small_res.txt", 'a')
 
 for image_path in tqdm(file_list):
     try:
-        if os.path.getsize(image_path) < 102400:
+        if image_ext == ".jxl":
+            width, height = get_jxl_size(image_path)
+        else:
+            width, height = imagesize.get(image_path)
+        image_size = width * height
+        if image_size < 768000: # 600x1280
             if remove_files:
                 os.remove(image_path)
-            small_file.write(image_path+"\n")
-        elif os.path.getsize(image_path) > 10240000:
-            if image_ext == ".jxl":
-                width, height = get_jxl_size(image_path)
-            else:
-                width, height = imagesize.get(image_path)
-            image_size = width * height
-            if image_size > 4194304: # 2048x2048
-                if resize_files:
-                    image = Image.open(image_path)
-                    scale = math.sqrt(image_size / 4194304)
-                    new_width = int(width/scale)
-                    new_height = int(height/scale)
-                    image = image.convert("RGBA").resize((new_width, new_height), Image.LANCZOS)
-                    image.save(image_path, lossless=True)
-                    image.close()
-                big_file.write(image_path+"\n")
+            small_res_file.write(image_path+"\n")
     except Exception as e:
         os.makedirs("errors", exist_ok=True)
         error_file = open("errors/errors.txt", 'a')
         error_file.write(f"ERROR: {image_path} MESSAGE: {e}\n")
         error_file.close()
-small_file.close()
-big_file.close()
+small_res_file.close()

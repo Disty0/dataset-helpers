@@ -10,6 +10,7 @@ import requests
 from tqdm import tqdm
 
 image_ext = ".jxl"
+save_raw_files = False
 pybooru.resources.SITE_LIST["shima"] = {"url": "https://shima.donmai.us/"}
 client = pybooru.Danbooru('shima')
 
@@ -147,7 +148,7 @@ for id in tqdm(id_list):
         and not any([bool(tag in general_tags) for tag in general_blacklist])
         and not any([bool(tag in image_data["tag_string_meta"]) for tag in meta_blacklist])):
             try:
-                if False: # save raw files
+                if save_raw_files:
                     image_data = requests.get(image_data["file_url"], stream=True).raw.read()
                     with open(os.path.join(folder, str(id)+".bin"), "wb") as jpg_file:
                         jpg_file.write(image_data)
