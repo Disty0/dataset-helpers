@@ -33,6 +33,14 @@ device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") 
 dtype = torch.bfloat16 if not use_ipex_llm else torch.float16
 use_flash_atten = "cuda" in device and torch.version.cuda
 
+quanto_weights = None
+if not use_ipex_llm:
+    if "72b" in model_id.lower() or "32b" in model_id.lower():
+        quanto_weights = "int4" 
+    elif "xpu" in device and "7b" in model_id.lower():
+        quanto_weights = "int8"
+    
+
 if image_ext == ".jxl":
     import pillow_jxl # noqa: F401
 from PIL import Image # noqa: E402
@@ -532,12 +540,18 @@ def main():
         torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(True)
     except Exception:
         pass
+    if quanto_weights is not None:
+        from transformers import QuantoConfig
+        quantization_config = QuantoConfig(weights=quanto_weights)
+    else:
+        quantization_config = None
     processor = AutoProcessor.from_pretrained(model_id, use_fast=True)
     logits_processor = UncensorQwen2()
     model = Qwen2Model.from_pretrained(
         model_id, torch_dtype=dtype, device_map=device if not use_ipex_llm else "cpu",
         attn_implementation="flash_attention_2" if use_flash_atten else "sdpa",
-    ).to(dtype=dtype).eval()
+        quantization_config=quantization_config,
+    ).eval()
     model.requires_grad_(False)
     model.visual.eval()
     model.visual.requires_grad_(False)
@@ -599,7 +613,7 @@ def main():
         del save_backend
     atexit.register(exit_handler, image_backend, save_backend)
 
-    with torch.inference_mode():
+    with torch.inference_mode() if quanto_weights is None else torch.no_grad():
         for _ in tqdm(range(epoch_len)):
             try:
                 inputs, image_paths, copyright_tags = image_backend.get_images()

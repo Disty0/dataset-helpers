@@ -8,10 +8,9 @@ import time
 import atexit
 import torch
 try:
-    import intel_extension_for_pytorch as ipex
-    ipex_available = True
+    import intel_extension_for_pytorch as ipex # noqa: F401
 except Exception:
-    ipex_available = False
+    pass
 import huggingface_hub
 from transformers import CLIPModel, CLIPProcessor
 from queue import Queue
@@ -22,7 +21,7 @@ from typing import List, Tuple
 
 batch_size = 32
 image_ext = ".jxl"
-device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
+device = "cuda" if torch.cuda.is_available() else "cpu" # "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
 caption_key = "wd-aes-b32-v0"
 MODEL_REPO = "hakurei/waifu-diffusion-v1-4"
 MODEL_FILENAME = "models/aes-B32-v0.pth"
@@ -88,7 +87,7 @@ class ImageBackend():
                 for batch in batches:
                     image = self.load_from_file(batch)
                     images.append(image)
-                inputs = self.processor(images=images, return_tensors='pt')['pixel_values'].to(dtype=dtype, memory_format=torch.channels_last)
+                inputs = self.processor(images=images, return_tensors='pt')['pixel_values'].to(dtype=dtype)
                 self.load_queue.put((inputs, batches))
                 self.load_queue_lenght += 1
             else:
@@ -142,24 +141,26 @@ def main():
     except Exception:
         pass
     clipprocessor = CLIPProcessor.from_pretrained(CLIP_REPO)
-    clipmodel = CLIPModel.from_pretrained(CLIP_REPO).eval().to(device, dtype=dtype, memory_format=torch.channels_last)
+    clipmodel = CLIPModel.from_pretrained(CLIP_REPO).eval().to(device, dtype=dtype)
     clipmodel.requires_grad_(False)
-    if "xpu" in device and ipex_available:
-        clipmodel = ipex.optimize(clipmodel, dtype=dtype, inplace=True, weights_prepack=False)
+    if device == "cpu":
+        import openvino.properties.hint as ov_hints
+        clipmodel.get_image_features = torch.compile(clipmodel.get_image_features, backend="openvino", options={"device": "GPU", "config" : {ov_hints.execution_mode : ov_hints.ExecutionMode.ACCURACY}})
     else:
-        clipmodel = torch.compile(clipmodel, mode="max-autotune", backend="inductor")
+        clipmodel.get_image_features = torch.compile(clipmodel.get_image_features, mode="max-autotune", backend="inductor")
 
     aes_model = Classifier(512, 256, 1).to("cpu")
     aes_model.load_state_dict(torch.load(
         huggingface_hub.hf_hub_download(
             repo_id=MODEL_REPO,
             repo_type='model',
-            filename=MODEL_FILENAME),
+            filename=MODEL_FILENAME
+        ),
         map_location="cpu"))
-    aes_model = aes_model.eval().to(device, dtype=dtype, memory_format=torch.channels_last)
+    aes_model = aes_model.eval().to(device, dtype=dtype)
     aes_model.requires_grad_(False)
-    if "xpu" in device and ipex_available:
-        aes_model = ipex.optimize(aes_model, dtype=dtype, inplace=True, weights_prepack=False)
+    if device == "cpu":
+        aes_model = torch.compile(aes_model, backend="openvino", options={"device": "GPU", "config" : {ov_hints.execution_mode : ov_hints.ExecutionMode.ACCURACY}})
     else:
         aes_model = torch.compile(aes_model, mode="max-autotune", backend="inductor")
 
@@ -210,8 +211,7 @@ def main():
             try:
                 inputs, image_paths = image_backend.get_images()
                 image_embeds = clipmodel.get_image_features(pixel_values=inputs.to(device))
-                for i in range(len(image_embeds)):
-                    image_embeds[i] = image_embeds[i] / torch.linalg.norm(image_embeds[i])
+                image_embeds = image_embeds / torch.linalg.norm(image_embeds, dim=1).unsqueeze(-1)
                 predictions = aes_model(image_embeds)
                 save_backend.save(predictions, image_paths)
             except Exception as e:

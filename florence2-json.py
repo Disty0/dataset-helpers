@@ -383,7 +383,7 @@ class ImageBackend():
                 inputs = self.processor(text=prompts, images=images, return_tensors="pt", padding="longest", max_length=769, truncation=True) # 769 = 577 image + 192 text. max_length > 769 is too slow.
                 attention_mask_image = torch.ones((inputs["attention_mask"].shape[0], 577), device=inputs["attention_mask"].device, dtype=inputs["attention_mask"].dtype)
                 inputs["attention_mask"] = torch.cat([attention_mask_image, inputs["attention_mask"]], dim=1) # add atten mask for the image
-                inputs["pixel_values"] = inputs["pixel_values"].to(dtype=dtype, memory_format=torch.channels_last)
+                inputs["pixel_values"] = inputs["pixel_values"].to(dtype=dtype)
                 self.load_queue.put((inputs, batches))
                 self.load_queue_lenght += 1
             else:
@@ -455,9 +455,9 @@ def main():
     model = AutoModelForCausalLM.from_pretrained(
         model_id, revision=revision, trust_remote_code=True, torch_dtype=dtype,
         attn_implementation="flash_attention_2" if use_flash_atten else None,
-    ).to(device, dtype=dtype, memory_format=torch.channels_last).eval()
+    ).to(device, dtype=dtype).eval()
     model.requires_grad_(False)
-    model.vision_tower.to(memory_format=torch.channels_last).eval()
+    model.vision_tower.eval()
     model.vision_tower.requires_grad_(False)
     model.language_model.eval()
     model.language_model.requires_grad_(False)
