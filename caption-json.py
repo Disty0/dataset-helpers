@@ -55,21 +55,24 @@ use_flash_atten = "cuda" in device and torch.version.cuda
 use_logits_processor = "qwen2" in model_id_lower
 cache_implementation = "static" if "gemma" not in model_id_lower else "hybrid"
 
+if device == "cpu":
+    import psutil
+    device_memory = math.ceil(psutil.virtual_memory().total / 1024 / 1024 / 1024)
+else:
+    device_memory = math.ceil(getattr(torch, torch.device(device).type).get_device_properties(device).total_memory / 1024 / 1024 / 1024)
 
 model_param_size = int(model_id_lower.rsplit("b-", maxsplit=1)[0].rsplit("-", maxsplit=1)[-1].replace("b",""))
 quanto_weights = None
 ipex_llm_weights = "bf16"
 if ipex_llm_available:
-    if model_param_size > 16:
+    if model_param_size > device_memory:
         ipex_llm_weights = "sym_int4"
-    elif model_param_size > 8:
+    elif model_param_size > device_memory / 2:
         ipex_llm_weights = "sym_int8"
 else:
-    if model_param_size > 24:
-        quanto_weights = "int4" 
-    elif model_param_size > 12:
-        quanto_weights = "int8"
-    elif "xpu" in device and model_param_size > 8:
+    if model_param_size > device_memory:
+        quanto_weights = "int4"
+    elif model_param_size > device_memory / 2:
         quanto_weights = "int8"
     
 
