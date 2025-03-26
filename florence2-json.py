@@ -12,10 +12,11 @@ try:
     import transformers # ipex hijacks transformers and makes it unable to load a model
     backup_get_class_from_dynamic_module = transformers.dynamic_module_utils.get_class_from_dynamic_module
     import intel_extension_for_pytorch as ipex
+    ipex_available = True
     ipex.llm.utils._get_class_from_dynamic_module = backup_get_class_from_dynamic_module
     transformers.dynamic_module_utils.get_class_from_dynamic_module = backup_get_class_from_dynamic_module
 except Exception:
-    pass
+    ipex_available = False
 from queue import Queue
 from transformers import AutoModelForCausalLM, AutoProcessor
 from concurrent.futures import ThreadPoolExecutor
@@ -462,14 +463,13 @@ def main():
     model.language_model.eval()
     model.language_model.requires_grad_(False)
 
-    if "xpu" in device:
-        #model.vision_tower = ipex.llm.optimize(model.vision_tower, device=device, dtype=dtype, inplace=True)
-        #model.language_model = ipex.llm.optimize(model.language_model, device=device, dtype=dtype, inplace=True)
-        pass
+    if ipex_available:
+        model.vision_tower = ipex.llm.optimize(model.vision_tower, device=device, dtype=dtype, inplace=True)
+        model.language_model = ipex.llm.optimize(model.language_model, device=device, dtype=dtype, inplace=True)
     else:
         #torch.cuda.tunable.enable(val=True)
-        model.vision_tower = torch.compile(model.vision_tower, mode="max-autotune", backend="inductor")
-        model.language_model = torch.compile(model.language_model, mode="max-autotune", backend="inductor")
+        #model.generate = torch.compile(model.generate, mode="max-autotune", backend="inductor")
+        pass # causes kwarg doesn't exists and nonetype errors
 
 
     print(f"Searching for {image_ext} files...")
@@ -534,7 +534,7 @@ def main():
                     input_ids=inputs["input_ids"].to(device),
                     pixel_values=inputs["pixel_values"].to(device),
                     attention_mask=inputs["attention_mask"].to(device),
-                    max_new_tokens=512,
+                    max_new_tokens=1024,
                     do_sample=False,
                     num_beams=3
                 )

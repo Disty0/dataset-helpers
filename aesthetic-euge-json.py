@@ -174,9 +174,9 @@ def main():
     aes_model = aes_model.eval().to(device, dtype=dtype)
     aes_model.requires_grad_(False)
     if device == "cpu":
-        aes_model = torch.compile(aes_model, backend="openvino", options={"device": "GPU", "config" : {ov_hints.execution_mode : ov_hints.ExecutionMode.ACCURACY}})
+        aes_model.forward = torch.compile(aes_model.forward, backend="openvino", options={"device": "GPU", "config" : {ov_hints.execution_mode : ov_hints.ExecutionMode.ACCURACY}})
     else:
-        aes_model = torch.compile(aes_model, mode="max-autotune", backend="inductor")
+        aes_model.forward = torch.compile(aes_model.forward, mode="max-autotune", backend="inductor")
 
 
     print(f"Searching for {image_ext} files...")
