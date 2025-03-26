@@ -18,6 +18,7 @@ caption_key = "gemma-3-12b-it"
 #caption_key = "florence-2-base-promptgen-v1-5"
 out_path = ""
 
+is_gemma = "gemma" in caption_key
 
 cleanup_start_list = (
     ["This is", ""],
@@ -184,11 +185,15 @@ def cleanup_repeats_recursive(caption: str) -> str:
     
 
 def cleanup_whitespace(caption: str) -> str:
+    while caption[0] == "\n":
+        caption = caption[1:]
     while caption[0] == ",":
         caption = caption[1:]
     while caption[0] == ".":
         caption = caption[1:]
     while caption[0] == " ":
+        caption = caption[1:]
+    while caption[0] == "\n":
         caption = caption[1:]
     while caption[-1] == "\n":
         caption = caption[:-1]
@@ -204,6 +209,8 @@ def cleanup_whitespace(caption: str) -> str:
 
 
 def cleanup_caption(caption: str) -> str:
+    if is_gemma:
+        caption = caption.split("\n", maxsplit=1)[-1]
     caption = cleanup_repeats_recursive(caption)
     caption = cleanup_whitespace(caption)
     for old_tag, new_tag in cleanup_caption_list:
