@@ -23,12 +23,15 @@ if not ipex_llm_available:
     except Exception:
         pass
 
-if torch.xpu.is_available():
-    # https://github.com/Disty0/ipex_to_cuda
-    # in use for dynamic atten
-    from ipex_to_cuda import ipex_init
-    ipex_active, message = ipex_init()
-    print(f"IPEX Active: {ipex_active} Message: {message}")
+try:
+    if torch.xpu.is_available():
+        # https://github.com/Disty0/ipex_to_cuda
+        # in use for dynamic atten
+        from ipex_to_cuda import ipex_init
+        ipex_active, message = ipex_init()
+        print(f"IPEX Active: {ipex_active} Message: {message}")
+except ImportError:
+    pass
 
 from transformers import AutoModelForImageTextToText, AutoProcessor, LogitsProcessor
 from queue import Queue
