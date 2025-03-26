@@ -8,16 +8,29 @@ import json
 import time
 import atexit
 import random
+
 import torch
+
 try:
-    use_ipex_llm = False
-    if use_ipex_llm:
-        import ipex_llm
-    else:
-        import intel_extension_for_pytorch as ipex # noqa: F401
+    import ipex_llm
+    ipex_llm_available = True
 except Exception:
-    use_ipex_llm = False
-from transformers import AutoProcessor, LogitsProcessor
+    ipex_llm_available = False
+
+if not ipex_llm_available:
+    try:
+        import intel_extension_for_pytorch as ipex # noqa: F401
+    except Exception:
+        pass
+
+if torch.xpu.is_available():
+    # https://github.com/Disty0/ipex_to_cuda
+    # in use for dynamic atten
+    from ipex_to_cuda import ipex_init
+    ipex_active, message = ipex_init()
+    print(f"IPEX Active: {ipex_active} Message: {message}")
+
+from transformers import AutoModelForImageTextToText, AutoProcessor, LogitsProcessor
 from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
@@ -27,17 +40,33 @@ from typing import Dict, List, Tuple, Union
 batch_size = 1
 image_ext = ".jxl"
 max_image_size = 1048576 # 1024x1024
-model_id = "Qwen/Qwen2.5-VL-7B-Instruct"
-caption_key = "qwen2.5-vl-7b-instruct"
-device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
-dtype = torch.bfloat16 if not use_ipex_llm else torch.float16
-use_flash_atten = "cuda" in device and torch.version.cuda
 
+model_id = "google/gemma-3-12b-it"
+#model_id = "Qwen/Qwen2.5-VL-7B-Instruct"
+
+model_id_lower = model_id.lower()
+caption_key = model_id_lower.split("/", maxsplit=1)[-1]
+device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
+dtype = torch.bfloat16 if not ipex_llm_available else torch.float16
+use_flash_atten = "cuda" in device and torch.version.cuda
+use_logits_processor = "qwen2" in model_id_lower
+cache_implementation = "static" if "gemma" not in model_id_lower else "hybrid"
+
+
+model_param_size = int(model_id_lower.rsplit("b-", maxsplit=1)[0].rsplit("-", maxsplit=1)[-1].replace("b",""))
 quanto_weights = None
-if not use_ipex_llm:
-    if "72b" in model_id.lower() or "32b" in model_id.lower():
+ipex_llm_weights = "bf16"
+if ipex_llm_available:
+    if model_param_size > 16:
+        ipex_llm_weights = "sym_int4"
+    elif model_param_size > 8:
+        ipex_llm_weights = "sym_int8"
+else:
+    if model_param_size > 24:
         quanto_weights = "int4" 
-    elif "xpu" in device and "7b" in model_id.lower():
+    elif model_param_size > 12:
+        quanto_weights = "int8"
+    elif "xpu" in device and model_param_size > 8:
         quanto_weights = "int8"
     
 
@@ -46,13 +75,9 @@ if image_ext == ".jxl":
 from PIL import Image # noqa: E402
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
-if "qwen2.5" in model_id.lower():
+if not use_flash_atten and "qwen2.5" in model_id_lower:
     import transformers
-    if not use_flash_atten:
-        transformers.utils.is_flash_attn_2_available = lambda: False
-    from transformers import Qwen2_5_VLForConditionalGeneration as Qwen2Model
-else:
-    from transformers import Qwen2VLForConditionalGeneration as Qwen2Model
+    transformers.utils.is_flash_attn_2_available = lambda: False
 
 if torch.version.hip:
     try:
@@ -435,7 +460,7 @@ class ImageBackend():
         if os.path.exists(json_path):
             booru_tags, copyright_tags = get_tags_from_json(json_path)
             if booru_tags:
-                prompt += " Address the characters by their name. Try to mention the name of the characters and the name of the artist. These are the tags for the image, you can use them for guidance but don't add them to the description as tags: " + booru_tags
+                prompt += " Address the characters by their name. Try to mention the name of the characters and the name of the artist if available. These are the tags for the image, you can use them for guidance but don't add them to the description as tags: " + booru_tags
         conversation = [
             {
                 "role": "system",
@@ -546,29 +571,24 @@ def main():
     else:
         quantization_config = None
     processor = AutoProcessor.from_pretrained(model_id, use_fast=True)
-    logits_processor = UncensorQwen2()
-    model = Qwen2Model.from_pretrained(
-        model_id, torch_dtype=dtype, device_map=device if not use_ipex_llm else "cpu",
+    if use_logits_processor:
+        logits_processor = [UncensorQwen2()]
+    else:
+        logits_processor = None
+    model = AutoModelForImageTextToText.from_pretrained(
+        model_id, torch_dtype=dtype, device_map=device if not ipex_llm_available else "cpu",
         attn_implementation="flash_attention_2" if use_flash_atten else "sdpa",
         quantization_config=quantization_config,
     ).eval()
     model.requires_grad_(False)
-    model.visual.eval()
-    model.visual.requires_grad_(False)
-    model.model.eval()
-    model.model.requires_grad_(False)
 
-    if use_ipex_llm:
-        model = ipex_llm.optimize_model(model, low_bit="sym_int8")
+    if ipex_llm_available:
+        model = ipex_llm.optimize_model(model, low_bit=ipex_llm_weights)
         model = model.to(device)
     """
     elif "xpu" not in device:
         #torch.cuda.tunable.enable(val=True) # tunableops causes nonsense outputs
-        #torch.set_float32_matmul_precision('high')
-        torch.compiler.cudagraph_mark_step_begin()
-        model.visual = torch.compile(model.visual, backend="inductor")
-        torch.compiler.cudagraph_mark_step_begin()
-        model.model = torch.compile(model.model, backend="inductor")
+        model.generate = torch.compile(model.generate, backend="inductor")
     """
 
 
@@ -624,10 +644,10 @@ def main():
                         **inputs,
                         max_new_tokens=1024,
                         use_cache=True,
-                        do_sample=True,
+                        do_sample=False, # disables temperature, top_k etc
                         temperature=0.1,
                         repetition_penalty=1.025,
-                        logits_processor=[logits_processor],
+                        logits_processor=logits_processor,
                     )
                 generated_ids = [
                     output_ids[len(input_ids) :]
