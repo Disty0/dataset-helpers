@@ -76,7 +76,7 @@ booru_tag_prompt = "These are the tags for the image, you can use them for guida
 model_id_lower = model_id.lower()
 caption_key = model_id_lower.split("/", maxsplit=1)[-1]
 device = "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
-dtype = torch.bfloat16 if not ipex_llm_available else torch.float16
+dtype = torch.bfloat16 if (not ipex_llm_available and device != "cpu") else torch.float16 if ipex_llm_available else torch.float32
 use_flash_atten = "cuda" in device and torch.version.cuda
 use_logits_processor = "qwen2" in model_id_lower
 is_gemma = "gemma" in model_id_lower
@@ -84,14 +84,14 @@ is_gemma = "gemma" in model_id_lower
 
 if device == "cpu":
     import psutil
-    device_memory = math.ceil(psutil.virtual_memory().total / 1024 / 1024 / 1024)
+    device_memory = math.ceil(psutil.virtual_memory().available / 1024 / 1024 / 1024)
 else:
     device_memory = math.ceil(getattr(torch, torch.device(device).type).get_device_properties(device).total_memory / 1024 / 1024 / 1024)
 
 model_param_size = int(model_id_lower.rsplit("b-", maxsplit=1)[0].rsplit("-", maxsplit=1)[-1].replace("b",""))
 
 quanto_weights = None
-ipex_llm_weights = "bf16"
+ipex_llm_weights = "fp16"
 if ipex_llm_available:
     if model_param_size >= device_memory:
         ipex_llm_weights = "sym_int4"
@@ -99,6 +99,8 @@ if ipex_llm_available:
     elif model_param_size >= device_memory / 2:
         ipex_llm_weights = "sym_int8"
         free_memory = (device_memory - (model_param_size))
+    elif dtype == torch.float32:
+        free_memory = (device_memory - (model_param_size * 4))
     else:
         free_memory = (device_memory - (model_param_size * 2))
 else:
@@ -108,12 +110,17 @@ else:
     elif model_param_size >= device_memory / 2:
         quanto_weights = "int8"
         free_memory = (device_memory - (model_param_size))
+    elif dtype == torch.float32:
+        free_memory = (device_memory - (model_param_size * 4))
     else:
         free_memory = (device_memory - (model_param_size * 2))
 
 offload_cache = free_memory <= 2
 if is_gemma:
-    batch_size = int((free_memory * 4) / math.sqrt(model_param_size))
+    if dtype == torch.float32:
+        batch_size = int((free_memory * 2) / math.sqrt(model_param_size))
+    else:
+        batch_size = int((free_memory * 4) / math.sqrt(model_param_size))
     batch_size -= batch_size % 2
     batch_size = max(batch_size, 1)
     cache_base_prompt = batch_size == 1 # cache fails with shape error
