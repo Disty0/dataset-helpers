@@ -209,16 +209,7 @@ def cleanup_whitespace(caption: str) -> str:
     return caption
 
 
-def cleanup_caption(caption: str) -> str:
-    if is_gemma:
-        if caption.startswith("Here") or caption.startswith("Okay") or caption.startswith("here") or caption.startswith("okay"):
-            caption = caption.split("\n", maxsplit=1)[-1]
-        split_caption = caption.rsplit("\n\n", maxsplit=2)
-        if split_caption[-2] == "---":
-            caption = split_caption[0]
-        split_caption = caption.rsplit("\n", maxsplit=1)
-        if split_caption[-1].endswith("?"):
-            caption = split_caption[0]
+def cleanup_caption(caption: str, json_data: dict = None) -> str:
     caption = cleanup_repeats_recursive(caption)
     caption = cleanup_whitespace(caption)
     for old_tag, new_tag in cleanup_caption_list:
@@ -240,32 +231,41 @@ def cleanup_caption(caption: str) -> str:
         caption = caption.replace('\n ', '\n')
         caption = cleanup_whitespace(caption)
     if is_gemma:
+        done_gemma_cleanup = False
+        if caption.startswith("Here") or caption.startswith("Okay") or caption.startswith("here") or caption.startswith("okay"):
+            caption = caption.split("\n", maxsplit=1)[-1]
+            done_gemma_cleanup = True
+
         if (caption.startswith('"') and caption.endswith('"')) or (caption.startswith('“') and caption.endswith('”')):
             caption = caption[1:-1]
-            caption = cleanup_whitespace(caption)
-            caption = cleanup_repeats_recursive(caption)
-            caption = cleanup_whitespace(caption)
+            done_gemma_cleanup = True
+
+        split_caption = caption.rsplit("\n\n", maxsplit=2)
+        if split_caption[-2] == "---":
+            caption = split_caption[0]
+            done_gemma_cleanup = True
+
         split_caption = caption.rsplit("\n", maxsplit=1)
-        if "disclaimer" in split_caption[-1].lower():
-            caption = split_caption[0]
-            caption = cleanup_whitespace(caption)
-            caption = cleanup_repeats_recursive(caption)
-            caption = cleanup_whitespace(caption)
-            split_caption = caption.rsplit("\n", maxsplit=1)
-        if "informational purposes" in split_caption[-1].lower():
-            caption = split_caption[0]
-            caption = cleanup_whitespace(caption)
-            caption = cleanup_repeats_recursive(caption)
-            caption = cleanup_whitespace(caption)
-            split_caption = caption.rsplit("\n", maxsplit=1)
         if split_caption[-1].startswith("I ") or split_caption[-1].startswith("I'"):
             caption = split_caption[0]
-            caption = cleanup_whitespace(caption)
-            caption = cleanup_repeats_recursive(caption)
-            caption = cleanup_whitespace(caption)
+            done_gemma_cleanup = True
             split_caption = caption.rsplit("\n", maxsplit=1)
-        if split_caption[-1].startswith("Let ") or split_caption[-1].startswith("Let'"):
+        elif split_caption[-1].startswith("Let ") or split_caption[-1].startswith("Let'") or split_caption[-1].startswith("Please let"):
             caption = split_caption[0]
+            done_gemma_cleanup = True
+            split_caption = caption.rsplit("\n", maxsplit=1)
+
+        if split_caption[-1].endswith("?"):
+            caption = split_caption[0]
+            done_gemma_cleanup = True
+        elif "disclaimer" in split_caption[-1].lower():
+            caption = split_caption[0]
+            done_gemma_cleanup = True
+        elif "informational purposes" in split_caption[-1].lower():
+            caption = split_caption[0]
+            done_gemma_cleanup = True
+
+        if done_gemma_cleanup:
             caption = cleanup_whitespace(caption)
             caption = cleanup_repeats_recursive(caption)
             caption = cleanup_whitespace(caption)
@@ -275,7 +275,7 @@ def cleanup_caption(caption: str) -> str:
 def get_captions_from_json(json_path: str) -> str:
     with open(json_path, "r") as json_file:
         json_data = json.load(json_file)
-    return cleanup_caption(json_data[caption_key])
+    return cleanup_caption(json_data[caption_key], json_data=json_data)
 
 
 class SaveTagBackend():
