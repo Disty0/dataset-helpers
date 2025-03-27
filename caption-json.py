@@ -62,6 +62,7 @@ image_ext = ".jxl"
 max_image_size = 1048576 # 1024x1024
 max_new_tokens = 2048
 use_tunable_ops = False # Set to True for performance increase for AMD, uses quite a bit of VRAM when tuning
+use_torch_compile = False # torch.compile causes nonsense outputs
 
 model_id = "google/gemma-3-4b-it"
 #model_id = "Qwen/Qwen2.5-VL-7B-Instruct"
@@ -74,7 +75,7 @@ booru_tag_prompt = "These are the tags for the image, you can use them for guida
 
 model_id_lower = model_id.lower()
 caption_key = model_id_lower.split("/", maxsplit=1)[-1]
-device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
+device = "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
 dtype = torch.bfloat16 if not ipex_llm_available else torch.float16
 use_flash_atten = "cuda" in device and torch.version.cuda
 use_logits_processor = "qwen2" in model_id_lower
@@ -609,7 +610,7 @@ def main():
     else:
         logits_processor = None
     model = AutoModelForImageTextToText.from_pretrained(
-        model_id, torch_dtype=dtype, device_map=device if not ipex_llm_available else "cpu",
+        model_id, torch_dtype=dtype, device_map=device if "xpu" not in device else "cpu", # xpu hits the 4gb alloc limit
         attn_implementation="flash_attention_2" if use_flash_atten else "sdpa",
         quantization_config=quantization_config,
     ).eval()
@@ -618,11 +619,10 @@ def main():
 
     if ipex_llm_available:
         model = ipex_llm.optimize_model(model, low_bit=ipex_llm_weights)
+    if "xpu" in device:
         model = model.to(device)
 
-    # torch.compile causes nonsense outputs
-    """
-    else:
+    if use_torch_compile:
         if is_gemma:
             model.vision_tower = torch.compile(model.vision_tower, backend="inductor")
             model.multi_modal_projector = torch.compile(model.multi_modal_projector, backend="inductor")
@@ -631,7 +631,6 @@ def main():
             model.visual = torch.compile(model.visual, backend="inductor")
             model.lm_head = torch.compile(model.lm_head, backend="inductor")
             model.model = torch.compile(model.model, backend="inductor")
-    """
 
 
     print(f"Searching for {image_ext} files...")
@@ -723,7 +722,8 @@ def main():
         print("Starting to caption...")
         for _ in tqdm(range(epoch_len)):
             try:
-                torch.compiler.cudagraph_mark_step_begin()
+                if use_torch_compile:
+                    torch.compiler.cudagraph_mark_step_begin()
                 inputs, image_paths, copyright_tags = image_backend.get_images()
                 inputs = inputs.to(device)
                 input_ids_len = inputs["input_ids"].shape[-1]

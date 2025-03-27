@@ -6,22 +6,26 @@ import glob
 import json
 import time
 import atexit
+
 import torch
-#try:
-#    import intel_extension_for_pytorch as ipex # noqa: F401
-#except Exception:
-#    pass
+try:
+    import intel_extension_for_pytorch as ipex # noqa: F401
+except Exception:
+    pass
+
 from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
-from transformers import pipeline
+from transformers import ViTForImageClassification, ViTImageProcessor
 from tqdm import tqdm
 
 from typing import List, Tuple
 
+batch_size = 32
 image_ext = ".jxl"
-device = "cuda" if torch.cuda.is_available() else "cpu" # else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available()
+device = "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
 caption_key = "aesthetic-shadow-v2"
 MODEL_REPO = "shadowlilac/aesthetic-shadow-v2"
+dtype = torch.float16 if device != "cpu" else torch.float32
 
 if image_ext == ".jxl":
     import pillow_jxl # noqa: F401
@@ -30,10 +34,11 @@ Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 
 class ImageBackend():
-    def __init__(self, batches: List[str], load_queue_lenght: int = 128, max_load_workers: int = 4):
+    def __init__(self, batches: List[List[str]], processor: ViTImageProcessor, load_queue_lenght: int = 256, max_load_workers: int = 4):
         self.load_queue_lenght = 0
         self.keep_loading = True
         self.batches = Queue()
+        self.processor = processor
         for batch in batches:
             if isinstance(batch, str):
                 batch = [batch]
@@ -45,7 +50,7 @@ class ImageBackend():
             self.load_thread.submit(self.load_thread_func)
 
 
-    def get_images(self) -> Tuple[Image.Image, str]:
+    def get_images(self) -> Tuple[torch.FloatTensor, List[str]]:
         result = self.load_queue.get()
         self.load_queue_lenght -= 1
         return result
@@ -57,21 +62,22 @@ class ImageBackend():
                 time.sleep(0.1)
             elif not self.batches.empty():
                 batches = self.batches.get()
-                current_batch = []
+                images = []
                 for batch in batches:
-                    current_batch.append(self.load_from_file(batch))
-                self.load_queue.put(current_batch)
+                    images.append(self.load_from_file(batch))
+                inputs = self.processor(images=images, return_tensors='pt')['pixel_values'].to(dtype=dtype)
+                self.load_queue.put((inputs, batches))
                 self.load_queue_lenght += 1
             else:
                 time.sleep(5)
         print("Stopping the image loader threads")
 
 
-    def load_from_file(self, image_path: str) -> Tuple[Image.Image, str]:
+    def load_from_file(self, image_path: str) -> Image.Image:
         image = Image.open(image_path).convert("RGBA")
         background = Image.new('RGBA', image.size, (255, 255, 255))
         image = Image.alpha_composite(background, image).convert("RGB")
-        return (image, image_path)
+        return image
 
 
 class SaveAestheticBackend():
@@ -83,15 +89,16 @@ class SaveAestheticBackend():
             self.save_thread.submit(self.save_thread_func)
 
 
-    def save(self, data: float, path: str) -> None:
+    def save(self, data: List[float], path: List[str]) -> None:
         self.save_queue.put((data,path))
 
 
     def save_thread_func(self) -> None:
         while self.keep_saving:
             if not self.save_queue.empty():
-                data = self.save_queue.get()
-                self.save_to_file(data[0], data[1])
+                predictions, image_paths = self.save_queue.get()
+                for i in range(len(image_paths)):
+                    self.save_to_file(predictions[i][0].item(), os.path.splitext(image_paths[i])[0]+".json")
             else:
                 time.sleep(0.25)
         print("Stopping the save backend threads")
@@ -106,28 +113,23 @@ class SaveAestheticBackend():
 
 def main():
     steps_after_gc = -1
-    try:
-        torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(True)
-    except Exception:
-        pass
-    pipe = pipeline("image-classification", model=MODEL_REPO, device=device)
-    pipe.model.eval()
-    pipe.model.requires_grad_(False)
+    torch.set_float32_matmul_precision('high')
+    torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(True)
+    if torch.version.hip:
+        torch.cuda.tunable.enable(val=True)
 
-    if "cpu" in device:
-        os.environ.setdefault('PYTORCH_TRACING_MODE', 'TORCHFX')
-        torch._dynamo.eval_frame.check_if_dynamo_supported = lambda: True
-        import openvino.torch # noqa: F401
-        pipe.model = torch.compile(pipe.model, backend='openvino', options = {"device" : "GPU", "model_caching": True, "cache_dir": os.path.join(os.getenv('HOME'), ".cache/openvino/model_cache")})
-    #if "xpu" in device:
-    #    pipe.model = ipex.llm.optimize(pipe.model, device=device, dtype=torch.float32, inplace=True)
-    #else:
-    #    torch.cuda.tunable.enable(val=True)
-    #    pipe.model = torch.compile(pipe.model, mode="max-autotune", backend="inductor")
+    model = ViTForImageClassification.from_pretrained(MODEL_REPO, torch_dtype=dtype)
+    processor = ViTImageProcessor.from_pretrained(MODEL_REPO, use_fast=True)
+    model = model.to(device, dtype=dtype).eval()
+    model.requires_grad_(False)
+
+    if device == "cpu":
+        model = torch.compile(model, backend='openvino', options = {"device" : "GPU"})
+    else:
+        model = torch.compile(model, backend="inductor")
 
     print(f"Searching for {image_ext} files...")
     file_list = glob.glob(f'**/*{image_ext}')
-
     image_paths = []
 
     for image_path in tqdm(file_list):
@@ -140,8 +142,18 @@ def main():
         except Exception as e:
             print(f"ERROR: {json_path} MESSAGE: {e}")
 
-    epoch_len = len(image_paths)
-    image_backend = ImageBackend(image_paths)
+    batches = []
+    current_batch = []
+    for file in image_paths:
+        current_batch.append(file)
+        if len(current_batch) >= batch_size:
+            batches.append(current_batch)
+            current_batch = []
+    if len(current_batch) != 0:
+        batches.append(current_batch)
+
+    epoch_len = len(batches)
+    image_backend = ImageBackend(batches, processor)
     save_backend = SaveAestheticBackend()
 
     def exit_handler(image_backend, save_backend):
@@ -160,13 +172,10 @@ def main():
     with torch.no_grad():
         for _ in tqdm(range(epoch_len)):
             try:
-                image, image_path = image_backend.get_images()[0]
-                model_out = pipe(images=[image])[0]
-                if model_out[0]["label"] == "hq":
-                    prediction = model_out[0]["score"]
-                elif model_out[1]["label"] == "hq":
-                    prediction = model_out[1]["score"]
-                save_backend.save(prediction, os.path.splitext(image_path)[0]+".json")
+                inputs, image_paths = image_backend.get_images()
+                inputs = inputs.to(device)
+                prediction = torch.nn.functional.softmax(model(inputs).logits, dim=-1)
+                save_backend.save(prediction, image_paths)
             except Exception as e:
                 os.makedirs("errors", exist_ok=True)
                 error_file = open("errors/errors_aesthetic.txt", 'a')

@@ -7,10 +7,12 @@ import json
 import time
 import atexit
 import torch
+
 try:
     import intel_extension_for_pytorch as ipex # noqa: F401
 except Exception:
     pass
+
 import pytorch_lightning as pl
 import huggingface_hub
 from transformers import CLIPModel, CLIPProcessor
@@ -18,16 +20,16 @@ from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 
-from typing import Dict, List, Tuple
+from typing import List, Tuple
 
 batch_size = 32
 image_ext = ".jxl"
-device = "cuda" if torch.cuda.is_available() else "cpu" # "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
+device = "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
 caption_key = "waifu-scorer-v3"
 MODEL_REPO = "Eugeoter/waifu-scorer-v3"
 MODEL_FILENAME = "model.pth"
 CLIP_REPO = "openai/clip-vit-large-patch14"
-dtype = torch.float32
+dtype = torch.float16 if device != "cpu" else torch.float32
 
 if image_ext == ".jxl":
     import pillow_jxl # noqa: F401
@@ -85,7 +87,7 @@ class ImageBackend():
             self.load_thread.submit(self.load_thread_func)
 
 
-    def get_images(self) -> Tuple[List[Dict[str, torch.Tensor]], List[str]]:
+    def get_images(self) -> Tuple[torch.FloatTensor, List[str]]:
         result = self.load_queue.get()
         self.load_queue_lenght -= 1
         return result
@@ -99,8 +101,7 @@ class ImageBackend():
                 batches = self.batches.get()
                 images = []
                 for batch in batches:
-                    image = self.load_from_file(batch)
-                    images.append(image)
+                    images.append(self.load_from_file(batch))
                 inputs = self.processor(images=images, return_tensors='pt')['pixel_values'].to(dtype=dtype)
                 self.load_queue.put((inputs, batches))
                 self.load_queue_lenght += 1
@@ -116,7 +117,7 @@ class ImageBackend():
         return image
 
 
-class SaveQualityBackend():
+class SaveAestheticBackend():
     def __init__(self, max_save_workers: int = 2):
         self.keep_saving = True
         self.save_queue = Queue()
@@ -150,17 +151,19 @@ class SaveQualityBackend():
 
 def main():
     steps_after_gc = -1
+    torch.set_float32_matmul_precision('high')
+    torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(True)
     if torch.version.hip:
         torch.cuda.tunable.enable(val=True)
 
-    clipprocessor = CLIPProcessor.from_pretrained(CLIP_REPO)
+    clipprocessor = CLIPProcessor.from_pretrained(CLIP_REPO, use_fast=True)
     clipmodel = CLIPModel.from_pretrained(CLIP_REPO).eval().to(device, dtype=dtype)
     clipmodel.requires_grad_(False)
     if device == "cpu":
         import openvino.properties.hint as ov_hints
         clipmodel.get_image_features = torch.compile(clipmodel.get_image_features, backend="openvino", options={"device": "GPU", "config" : {ov_hints.execution_mode : ov_hints.ExecutionMode.ACCURACY}})
     else:
-        clipmodel.get_image_features = torch.compile(clipmodel.get_image_features, mode="max-autotune", backend="inductor")
+        clipmodel.get_image_features = torch.compile(clipmodel.get_image_features, backend="inductor")
 
     aes_model = MLP(input_size=768).to("cpu")
     aes_model.load_state_dict(torch.load(
@@ -175,7 +178,7 @@ def main():
     if device == "cpu":
         aes_model.forward = torch.compile(aes_model.forward, backend="openvino", options={"device": "GPU", "config" : {ov_hints.execution_mode : ov_hints.ExecutionMode.ACCURACY}})
     else:
-        aes_model.forward = torch.compile(aes_model.forward, mode="max-autotune", backend="inductor")
+        aes_model.forward = torch.compile(aes_model.forward, backend="inductor")
 
 
     print(f"Searching for {image_ext} files...")
@@ -204,7 +207,7 @@ def main():
 
     epoch_len = len(batches)
     image_backend = ImageBackend(batches, clipprocessor)
-    save_backend = SaveQualityBackend()
+    save_backend = SaveAestheticBackend()
 
     def exit_handler(image_backend, save_backend):
         image_backend.keep_loading = False
