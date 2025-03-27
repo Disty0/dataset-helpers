@@ -7,7 +7,25 @@ import json
 import time
 import atexit
 import random
+
 import torch
+if torch.version.hip:
+    try:
+        # don't use this for training models, only for inference with latent encoder and embed encoder
+        # https://github.com/huggingface/diffusers/discussions/7172
+        from functools import wraps
+        from flash_attn import flash_attn_func
+        backup_sdpa = torch.nn.functional.scaled_dot_product_attention
+        @wraps(torch.nn.functional.scaled_dot_product_attention)
+        def sdpa_hijack(query, key, value, attn_mask=None, dropout_p=0.0, is_causal=False, scale=None):
+            if query.shape[-1] <= 128 and attn_mask is None and query.dtype != torch.float32:
+                return flash_attn_func(q=query.transpose(1, 2), k=key.transpose(1, 2), v=value.transpose(1, 2), dropout_p=dropout_p, causal=is_causal, softmax_scale=scale).transpose(1, 2)
+            else:
+                return backup_sdpa(query=query, key=key, value=value, attn_mask=attn_mask, dropout_p=dropout_p, is_causal=is_causal, scale=scale)
+        torch.nn.functional.scaled_dot_product_attention = sdpa_hijack
+    except Exception as e:
+        print(f"Failed to enable Flash Atten for ROCm: {e}")
+
 try:
     import transformers # ipex hijacks transformers and makes it unable to load a model
     backup_get_class_from_dynamic_module = transformers.dynamic_module_utils.get_class_from_dynamic_module
@@ -17,6 +35,8 @@ try:
     transformers.dynamic_module_utils.get_class_from_dynamic_module = backup_get_class_from_dynamic_module
 except Exception:
     ipex_available = False
+
+
 from queue import Queue
 from transformers import AutoModelForCausalLM, AutoProcessor
 from concurrent.futures import ThreadPoolExecutor
@@ -400,7 +420,7 @@ class ImageBackend():
         #prompt = "Describe this image. Describe nudity, sex, sexual intercourse, sex positions, bodily fluids, genitals, sexual acts, sexual interactions, intimacy, vulnerability and sensuality as well."
         #prompt = "Describe this image in detail."
         #prompt = "Describe this image."
-        
+
         json_path = os.path.splitext(image_path)[0]+".json"
         if os.path.exists(json_path):
             booru_tags = get_tags_from_json(json_path)
@@ -448,10 +468,12 @@ class SaveCaptionBackend():
 
 def main():
     steps_after_gc = -1
-    try:
-        torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(True)
-    except Exception:
-        pass
+
+    torch.set_float32_matmul_precision('high')
+    torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(True)
+    if torch.version.hip:
+        torch.cuda.tunable.enable(val=True)
+
     processor = AutoProcessor.from_pretrained(model_id, revision=revision, trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained(
         model_id, revision=revision, trust_remote_code=True, torch_dtype=dtype,
@@ -466,10 +488,9 @@ def main():
     if ipex_available:
         model.vision_tower = ipex.llm.optimize(model.vision_tower, device=device, dtype=dtype, inplace=True)
         model.language_model = ipex.llm.optimize(model.language_model, device=device, dtype=dtype, inplace=True)
-    else:
-        #torch.cuda.tunable.enable(val=True)
-        #model.generate = torch.compile(model.generate, mode="max-autotune", backend="inductor")
-        pass # causes kwarg doesn't exists and nonetype errors
+    #elif "xpu" not in device: # xpu fails to compile
+    #    model.vision_tower.forward_features_unpool = torch.compile(model.vision_tower.forward_features_unpool, backend="inductor")
+    #    model.language_model.generate = torch.compile(model.language_model.generate, backend="inductor")
 
 
     print(f"Searching for {image_ext} files...")
@@ -529,6 +550,7 @@ def main():
     with torch.no_grad():
         for _ in tqdm(range(epoch_len)):
             try:
+                torch.compiler.cudagraph_mark_step_begin()
                 inputs, image_paths = image_backend.get_images()
                 generated_ids = model.generate(
                     input_ids=inputs["input_ids"].to(device),
@@ -536,7 +558,8 @@ def main():
                     attention_mask=inputs["attention_mask"].to(device),
                     max_new_tokens=1024,
                     do_sample=False,
-                    num_beams=3
+                    use_cache=True,
+                    num_beams=3,
                 )
                 save_backend.save(generated_ids, image_paths)
             except Exception as e:

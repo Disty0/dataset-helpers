@@ -182,7 +182,7 @@ def cleanup_repeats_recursive(caption: str) -> str:
         caption = caption + replace_string1
         caption = cleanup_repeats_recursive(caption)
     return caption
-    
+
 
 def cleanup_whitespace(caption: str) -> str:
     while caption[0] == "\n":
@@ -209,7 +209,7 @@ def cleanup_whitespace(caption: str) -> str:
 
 
 def cleanup_caption(caption: str) -> str:
-    if is_gemma:
+    if is_gemma and (caption.startswith("Here") or caption.startswith("Okay") or caption.startswith("here") or caption.startswith("okay")):
         caption = caption.split("\n", maxsplit=1)[-1]
     caption = cleanup_repeats_recursive(caption)
     caption = cleanup_whitespace(caption)

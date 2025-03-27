@@ -105,7 +105,7 @@ for id in tqdm(range(args.start, args.end)):
     if not (os.path.exists(image_path) and os.path.getsize(image_path) != 0):
         json_path = os.path.join(folder, f"{id}.json")
         jpg_path = None
-    
+
         if os.path.exists(json_path) and os.path.getsize(json_path) != 0:
             with open(json_path, "r") as f:
                 image_data = json.load(f)
