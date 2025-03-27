@@ -739,7 +739,7 @@ def main():
                     **inputs,
                     use_cache=True,
                     do_sample=False,
-                    repetition_penalty=1.05,
+                    repetition_penalty=1.025,
                     max_new_tokens=max_new_tokens,
                     logits_processor=logits_processor,
                     past_key_values=past_key_values,
