@@ -58,7 +58,7 @@ from tqdm import tqdm
 
 from typing import Dict, List, Tuple, Union
 
-batch_size = 1
+batch_size = 1 # qwen uses aspect ratios, can't batch, gemma outputs gets degrades with batch size
 image_ext = ".jxl"
 max_image_size = 1048576 # 1024x1024
 max_new_tokens = 2048
@@ -458,7 +458,7 @@ class ImageBackend():
                 copyright_tags = ""
                 for batch in batches:
                     image, prompt, char_tag = self.load_from_file(batch)
-                    images.append(image)
+                    images.append((image,)) # has to be a list of lists for batch size > 1
                     prompts.append(prompt)
                     if char_tag:
                         copyright_tags += " " + char_tag
@@ -685,15 +685,8 @@ def main():
             prompt_cache = StaticCache(config=model.model.config, max_batch_size=batch_size, max_cache_len=max_new_tokens, device=device, dtype=dtype)
 
         print("Caching base prompts...")
-        inputs = processor(text=text_input, images=None, padding="longest", return_tensors="pt").to(device)
-        _ = model.generate(
-            **inputs,
-            use_cache=True,
-            do_sample=False,
-            repetition_penalty=1.025,
-            max_new_tokens=1,
-            past_key_values=prompt_cache,
-        )
+        inputs = processor(text=[text_input] * batch_size, images=None, padding="longest", return_tensors="pt").to(device)
+        prompt_cache = model(**inputs, use_cache=True, past_key_values=prompt_cache).past_key_values
 
         if offload_cache:
             for i in range(len(prompt_cache.key_cache)):
@@ -734,6 +727,7 @@ def main():
                 ]
                 save_backend.save(generated_ids, image_paths)
             except Exception as e:
+                print(f"ERROR: {image_paths} MESSAGE: {e}")
                 os.makedirs("errors", exist_ok=True)
                 error_file = open("errors/errors.txt", 'a')
                 error_file.write(f"ERROR: {image_paths} MESSAGE: {e} \n")
