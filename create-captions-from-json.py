@@ -216,6 +216,9 @@ def cleanup_caption(caption: str) -> str:
         split_caption = caption.rsplit("\n\n", maxsplit=2)
         if split_caption[-2] == "---":
             caption = split_caption[0]
+        split_caption = caption.rsplit("\n", maxsplit=1)
+        if split_caption[-1].endswith("?"):
+            caption = split_caption[0]
     caption = cleanup_repeats_recursive(caption)
     caption = cleanup_whitespace(caption)
     for old_tag, new_tag in cleanup_caption_list:
@@ -236,6 +239,36 @@ def cleanup_caption(caption: str) -> str:
         caption = caption.replace('"', '')
         caption = caption.replace('\n ', '\n')
         caption = cleanup_whitespace(caption)
+    if is_gemma:
+        if (caption.startswith('"') and caption.endswith('"')) or (caption.startswith('“') and caption.endswith('”')):
+            caption = caption[1:-1]
+            caption = cleanup_whitespace(caption)
+            caption = cleanup_repeats_recursive(caption)
+            caption = cleanup_whitespace(caption)
+        split_caption = caption.rsplit("\n", maxsplit=1)
+        if "disclaimer" in split_caption[-1].lower():
+            caption = split_caption[0]
+            caption = cleanup_whitespace(caption)
+            caption = cleanup_repeats_recursive(caption)
+            caption = cleanup_whitespace(caption)
+            split_caption = caption.rsplit("\n", maxsplit=1)
+        if "informational purposes" in split_caption[-1].lower():
+            caption = split_caption[0]
+            caption = cleanup_whitespace(caption)
+            caption = cleanup_repeats_recursive(caption)
+            caption = cleanup_whitespace(caption)
+            split_caption = caption.rsplit("\n", maxsplit=1)
+        if split_caption[-1].startswith("I ") or split_caption[-1].startswith("I'"):
+            caption = split_caption[0]
+            caption = cleanup_whitespace(caption)
+            caption = cleanup_repeats_recursive(caption)
+            caption = cleanup_whitespace(caption)
+            split_caption = caption.rsplit("\n", maxsplit=1)
+        if split_caption[-1].startswith("Let ") or split_caption[-1].startswith("Let'"):
+            caption = split_caption[0]
+            caption = cleanup_whitespace(caption)
+            caption = cleanup_repeats_recursive(caption)
+            caption = cleanup_whitespace(caption)
     return caption
 
 
