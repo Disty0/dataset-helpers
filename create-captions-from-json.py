@@ -94,6 +94,7 @@ cleanup_caption_list = (
     [" ,", ","],
     [" .", "."],
     ["\n ", "\n"],
+    [" \n", "\n"],
     # qwen2
     #####################################################
     # florence2
@@ -209,8 +210,12 @@ def cleanup_whitespace(caption: str) -> str:
 
 
 def cleanup_caption(caption: str) -> str:
-    if is_gemma and (caption.startswith("Here") or caption.startswith("Okay") or caption.startswith("here") or caption.startswith("okay")):
-        caption = caption.split("\n", maxsplit=1)[-1]
+    if is_gemma:
+        if caption.startswith("Here") or caption.startswith("Okay") or caption.startswith("here") or caption.startswith("okay"):
+            caption = caption.split("\n", maxsplit=1)[-1]
+        split_caption = caption.rsplit("\n\n", maxsplit=2)
+        if split_caption[-2] == "---":
+            caption = split_caption[0]
     caption = cleanup_repeats_recursive(caption)
     caption = cleanup_whitespace(caption)
     for old_tag, new_tag in cleanup_caption_list:
