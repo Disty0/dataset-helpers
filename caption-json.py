@@ -502,9 +502,9 @@ class ImageBackend():
             booru_tags, copyright_tags = get_tags_from_json(json_path)
             if booru_tags:
                 if "no humans" in booru_tags:
-                    prompt += " " + booru_no_humans_prompt.format(booru_tags)
+                    prompt += " " + booru_no_humans_prompt + " " + booru_tag_prompt.format(booru_tags)
                 else:
-                    prompt += " " + booru_char_prompt.format(booru_tags)
+                    prompt += " " + booru_char_prompt + " " + booru_tag_prompt.format(booru_tags)
         conversation = [
             {
                 "role": "system",
