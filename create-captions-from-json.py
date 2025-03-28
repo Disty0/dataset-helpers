@@ -237,7 +237,13 @@ def cleanup_caption(caption: str, json_data: dict = None) -> str:
             if len(split_caption) == 1:
                 return ""
             else:
-                caption = split_caption[-1]
+                caption = cleanup_whitespace(split_caption[-1])
+            if caption.startswith("Here") or caption.startswith("Okay") or caption.startswith("here") or caption.startswith("okay"):
+                split_caption = caption.split("\n", maxsplit=1)
+                if len(split_caption) == 1:
+                    return ""
+                else:
+                    caption = cleanup_whitespace(split_caption[-1])
             done_gemma_cleanup = True
 
         if (caption.startswith('"') and caption.endswith('"')) or (caption.startswith('“') and caption.endswith('”')):
@@ -245,8 +251,8 @@ def cleanup_caption(caption: str, json_data: dict = None) -> str:
             done_gemma_cleanup = True
 
         split_caption = caption.rsplit("\n\n", maxsplit=2)
-        if len(split_caption) > 3 and split_caption[-2] == "---":
-            caption = split_caption[0]
+        if len(split_caption) > 2 and split_caption[-2] == "---":
+            caption = cleanup_whitespace(split_caption[0])
             done_gemma_cleanup = True
 
         split_caption = caption.rsplit("\n", maxsplit=1)
