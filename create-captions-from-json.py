@@ -241,7 +241,7 @@ def cleanup_caption(caption: str, json_data: dict = None) -> str:
             done_gemma_cleanup = True
 
         split_caption = caption.rsplit("\n\n", maxsplit=2)
-        if split_caption[-2] == "---":
+        if len(split_caption) > 3 and split_caption[-2] == "---":
             caption = split_caption[0]
             done_gemma_cleanup = True
 
