@@ -233,7 +233,11 @@ def cleanup_caption(caption: str, json_data: dict = None) -> str:
     if is_gemma:
         done_gemma_cleanup = False
         if caption.startswith("Here") or caption.startswith("Okay") or caption.startswith("here") or caption.startswith("okay"):
-            caption = caption.split("\n", maxsplit=1)[-1]
+            split_caption = caption.split("\n", maxsplit=1)
+            if len(split_caption) == 1:
+                return ""
+            else:
+                caption = split_caption[-1]
             done_gemma_cleanup = True
 
         if (caption.startswith('"') and caption.endswith('"')) or (caption.startswith('“') and caption.endswith('”')):
@@ -273,7 +277,7 @@ def cleanup_caption(caption: str, json_data: dict = None) -> str:
                 caption = split_caption[0] + "\n**Tags:**\n\n"
                 for tag in tags:
                     if tag:
-                        caption += tag + ", "
+                        caption += tag.lower() + ", "
                 caption = caption[:-2]
                 done_gemma_cleanup = True
 
@@ -314,13 +318,14 @@ class SaveTagBackend():
 
 
     def save_to_file(self, data: str, path: str) -> None:
-        if out_path:
-            os.makedirs(os.path.join(out_path, os.path.dirname(path)), exist_ok=True)
-            caption_file = open(os.path.join(out_path, path), "w")
-        else:
-            caption_file = open(path, "w")
-        caption_file.write(data)
-        caption_file.close()
+        if data:
+            if out_path:
+                os.makedirs(os.path.join(out_path, os.path.dirname(path)), exist_ok=True)
+                caption_file = open(os.path.join(out_path, path), "w")
+            else:
+                caption_file = open(path, "w")
+            caption_file.write(data)
+            caption_file.close()
 
 
 def main():
