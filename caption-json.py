@@ -563,11 +563,12 @@ class SaveCaptionBackend():
 
 
     def save_to_file(self, data: str, path: str) -> None:
-        with open(path, "r") as f:
-            json_data = json.load(f)
-        json_data[caption_key] = data
-        with open(path, "w") as f:
-            json.dump(json_data, f)
+        if data:
+            with open(path, "r") as f:
+                json_data = json.load(f)
+            json_data[caption_key] = data
+            with open(path, "w") as f:
+                json.dump(json_data, f)
 
 
 # qwen2 stops generating when it writes a coptyright name
