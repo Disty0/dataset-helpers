@@ -265,6 +265,18 @@ def cleanup_caption(caption: str, json_data: dict = None) -> str:
             caption = split_caption[0]
             done_gemma_cleanup = True
 
+        split_caption = caption.rsplit("\n**Tags:**\n", maxsplit=1)
+        if len(split_caption) == 2:
+            tags = split_caption[-1]
+            tags = ("\n" + cleanup_whitespace(tags)).split("\n*   ")
+            if len(tags) > 3:
+                caption = split_caption[0] + "\n**Tags:**\n\n"
+                for tag in tags:
+                    if tag:
+                        caption += tag + ", "
+                caption = caption[:-2]
+                done_gemma_cleanup = True
+
         if done_gemma_cleanup:
             caption = cleanup_whitespace(caption)
             caption = cleanup_repeats_recursive(caption)
