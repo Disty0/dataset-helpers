@@ -265,13 +265,8 @@ def cleanup_caption(caption: str, json_data: dict = None) -> str:
             done_gemma_cleanup = True
             split_caption = caption.rsplit("\n", maxsplit=1)
 
-        if split_caption[-1].endswith("?"):
-            caption = split_caption[0]
-            done_gemma_cleanup = True
-        elif "disclaimer" in split_caption[-1].lower():
-            caption = split_caption[0]
-            done_gemma_cleanup = True
-        elif "informational purposes" in split_caption[-1].lower():
+        split_caption_lower = split_caption[-1].lower() 
+        if split_caption[-1].endswith("?") or "disclaimer" in split_caption_lower or "informational purposes" in split_caption_lower or "description of the" in split_caption_lower:
             caption = split_caption[0]
             done_gemma_cleanup = True
 
