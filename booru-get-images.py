@@ -35,6 +35,8 @@ general_blacklist = (
     "wrong_foot",
     "wrong_hand",
     "small_hands",
+    "body_horror",
+    "conjoined",
     "bad_reflection",
     "bad_multiple_views",
     "bad_anatomy",
@@ -56,8 +58,6 @@ general_blacklist = (
     "bad_ass",
     "bad_vulva",
     "bad_neck",
-    "body_horror",
-    "conjoined",
     "extra_digits",
     "extra_pussies",
     "extra_breasts",
@@ -129,9 +129,11 @@ for id in tqdm(range(args.start, args.end)):
         height = int(image_data["image_height"])
         image_size = width * height
         general_tags = image_data["tag_string_general"].split(" ")
+        is_pixel_art = "pixel_art" in general_tags
 
-        if (image_data["file_ext"] not in {"avi", "gif", "html", "mp3", "mp4", "mpg", "pdf", "rar", "swf", "webm", "wmv", "zip"}
-        and image_size > 768000
+        if (image_data["file_ext"] not in {"avif", "avi", "gif", "html", "mp3", "mp4", "mpg", "pdf", "rar", "swf", "webm", "wmv", "zip"}
+        and (image_data["file_size"] > 102400 or is_pixel_art)
+        and (image_size > 768000 or is_pixel_art)
         and not image_data["is_banned"]
         and not image_data["is_flagged"]
         and not image_data["is_deleted"]
@@ -151,6 +153,14 @@ for id in tqdm(range(args.start, args.end)):
                         new_width = int(width/scale)
                         new_height = int(height/scale)
                         image = image.resize((new_width, new_height), Image.LANCZOS)
+                if is_pixel_art:
+                    width, height = image.size
+                    image_size = width * height
+                    if image_size < 1048576:
+                        scale = math.sqrt(image_size / 1048576)
+                        new_width = int(width/scale)
+                        new_height = int(height/scale)
+                        image = image.resize((new_width, new_height), Image.NEAREST)
                 image.save(image_path, lossless=True)
                 image.close()
                 if jpg_path is not None and os.path.exists(jpg_path):
