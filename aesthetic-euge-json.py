@@ -151,8 +151,15 @@ class SaveAestheticBackend():
 
 def main():
     steps_after_gc = -1
+
     torch.set_float32_matmul_precision('high')
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+
+    torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
+    torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction = True
     torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(True)
+
     if torch.version.hip:
         torch.cuda.tunable.enable(val=True)
 
