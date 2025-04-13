@@ -46,6 +46,8 @@ from typing import Dict, List, Tuple, Union
 
 batch_size = 8
 image_ext = ".jxl"
+use_tunable_ops = False
+use_torch_compile = False
 caption_key = "florence-2-base-promptgen-v1-5"
 model_id = "MiaoshouAI/Florence-2-base-PromptGen-v1.5"
 revision = "c06a5f02cc6071a5d65ee5d294cf3732d3097540"
@@ -477,7 +479,7 @@ def main():
     torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction = True
     torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(True)
 
-    if torch.version.hip:
+    if use_tunable_ops:
         torch.cuda.tunable.enable(val=True)
 
     processor = AutoProcessor.from_pretrained(model_id, revision=revision, trust_remote_code=True)
@@ -494,9 +496,9 @@ def main():
     if ipex_available:
         model.vision_tower = ipex.llm.optimize(model.vision_tower, device=device, dtype=dtype, inplace=True)
         model.language_model = ipex.llm.optimize(model.language_model, device=device, dtype=dtype, inplace=True)
-    #elif "xpu" not in device: # xpu fails to compile
-    #    model.vision_tower.forward_features_unpool = torch.compile(model.vision_tower.forward_features_unpool, backend="inductor")
-    #    model.language_model.generate = torch.compile(model.language_model.generate, backend="inductor")
+    elif use_torch_compile:
+        model.vision_tower.forward_features_unpool = torch.compile(model.vision_tower.forward_features_unpool, backend="inductor")
+        model.language_model.generate = torch.compile(model.language_model.generate, backend="inductor")
 
 
     print(f"Searching for {image_ext} files...")

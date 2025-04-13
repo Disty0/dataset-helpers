@@ -22,6 +22,8 @@ from typing import List, Tuple
 
 batch_size = 32
 image_ext = ".jxl"
+use_tunable_ops = False
+use_torch_compile = True
 device = "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
 caption_key = "aesthetic-shadow-v2"
 MODEL_REPO = "shadowlilac/aesthetic-shadow-v2"
@@ -122,7 +124,7 @@ def main():
     torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction = True
     torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(True)
 
-    if torch.version.hip:
+    if use_tunable_ops:
         torch.cuda.tunable.enable(val=True)
 
     model = ViTForImageClassification.from_pretrained(MODEL_REPO, torch_dtype=dtype)
@@ -132,7 +134,7 @@ def main():
 
     if device == "cpu":
         model = torch.compile(model, backend='openvino', options = {"device" : "GPU"})
-    else:
+    elif use_torch_compile:
         model = torch.compile(model, backend="inductor")
 
     print(f"Searching for {image_ext} files...")
