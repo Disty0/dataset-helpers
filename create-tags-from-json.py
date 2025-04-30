@@ -2,21 +2,21 @@
 
 import os
 import gc
-import glob
 import time
 import json
 import atexit
 import random
 from queue import Queue
+from glob import glob
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
 
 from typing import Dict, List
 
 
-image_ext = ".jxl"
 out_path = ""
 no_non_general_tags = False
+img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 
 
 meta_blacklist = (
@@ -91,6 +91,16 @@ no_shuffle_tags = (
     "multiple_others",
 )
 
+
+pixiv_tag_blacklist = (
+    "girl",
+    "boy",
+    "OC",
+    "original",
+    "original character",
+    "illustration",
+    "derivative work",
+)
 
 danbooru_quality_scores = {
     "g": {6: 50, 5: 30, 4: 20, 3: 10, 2: 5, 1: 1},
@@ -221,7 +231,7 @@ def dedupe_character_tags(split_tags: List[str]) -> List[str]:
     return deduped_tags
 
 
-def get_tags_from_json(json_path: str) -> str:
+def get_tags_from_json(json_path: str, image_path: str) -> str:
     with open(json_path, "r") as json_file:
         json_data = json.load(json_file)
 
@@ -282,7 +292,8 @@ def get_tags_from_json(json_path: str) -> str:
             split_general_tags.pop(split_general_tags.index(no_shuffle_tag))
             line += f", {no_shuffle_tag.replace('_', ' ')}"
 
-    for char in dedupe_character_tags(json_data["tag_string_character"].split(" ")):
+    character_tags = json_data["tag_string_character"].split(" ")
+    for char in dedupe_character_tags(character_tags):
         if char:
             line += f", character {char.replace('_', ' ')}"
 
@@ -298,7 +309,15 @@ def get_tags_from_json(json_path: str) -> str:
             if wd_tag and wd_tag not in no_shuffle_tags and wd_tag not in style_age_tags and wd_tag not in split_general_tags:
                 split_general_tags.append(wd_tag)
 
-    if json_data.get("file_ext", "jpg") not in {"png", "jxl"} and (json_data.get("file_size", float("inf")) < 307200 or os.path.getsize(os.path.splitext(json_path)[0]+image_ext) < 307200):
+    pixiv_tags = json_data.get("pixiv_tags", [])
+    if pixiv_tags:
+        for raw_pixiv_tag in pixiv_tags:
+            if raw_pixiv_tag:
+                pixiv_tag = raw_pixiv_tag.replace(" ", "_").lower()
+                if raw_pixiv_tag.isascii() and raw_pixiv_tag not in pixiv_tag_blacklist and pixiv_tag not in no_shuffle_tags and pixiv_tag not in style_age_tags and pixiv_tag not in split_general_tags and pixiv_tag not in split_copyright_tags and pixiv_tag not in character_tags:
+                    split_general_tags.append(raw_pixiv_tag)
+
+    if json_data.get("file_ext", "jpg") not in {"png", "jxl"} and (json_data.get("file_size", float("inf")) < 307200 or os.path.getsize(image_path) < 307200):
         split_general_tags.append("compression_artifacts")
 
     for tag in dedupe_tags(split_general_tags):
@@ -350,8 +369,10 @@ class SaveTagBackend():
 
 def main():
     steps_after_gc = 0
-    print(f"Searching for {image_ext} files...")
-    file_list = glob.glob(f'**/*{image_ext}')
+    print(f"Searching for {img_ext_list} files...")
+    file_list = []
+    for ext in img_ext_list:
+        file_list.extend(glob(f"**/*.{ext}"))
 
     save_backend = SaveTagBackend(max_save_workers=4)
 
@@ -367,7 +388,7 @@ def main():
     for image_path in tqdm(file_list):
         json_path = os.path.splitext(image_path)[0]+".json"
         try:
-            tags = get_tags_from_json(json_path)
+            tags = get_tags_from_json(json_path, image_path)
             save_backend.save(tags, os.path.splitext(json_path)[0]+".txt")
         except Exception as e:
             os.makedirs("errors", exist_ok=True)

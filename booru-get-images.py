@@ -161,7 +161,7 @@ for id in tqdm(range(args.start, args.end)):
                         new_width = int(width/scale)
                         new_height = int(height/scale)
                         image = image.resize((new_width, new_height), Image.NEAREST)
-                image.save(image_path, lossless=True)
+                image.save(image_path, lossless=True, lossless_jpeg=True)
                 image.close()
                 if jpg_path is not None and os.path.exists(jpg_path):
                     os.remove(jpg_path)

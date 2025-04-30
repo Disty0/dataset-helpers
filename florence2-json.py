@@ -2,7 +2,6 @@
 
 import os
 import gc
-import glob
 import json
 import time
 import atexit
@@ -40,12 +39,18 @@ except Exception:
 from queue import Queue
 from transformers import AutoModelForCausalLM, AutoProcessor
 from concurrent.futures import ThreadPoolExecutor
+from glob import glob
 from tqdm import tqdm
+
+try:
+    import pillow_jxl # noqa: F401
+except Exception:
+    pass
+from PIL import Image # noqa: E402
 
 from typing import Dict, List, Tuple, Union
 
 batch_size = 8
-image_ext = ".jxl"
 use_tunable_ops = False
 use_torch_compile = False
 caption_key = "florence-2-base-promptgen-v1-5"
@@ -54,10 +59,7 @@ revision = "c06a5f02cc6071a5d65ee5d294cf3732d3097540"
 device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
 dtype = torch.float16 if "cuda" in device else torch.bfloat16 if "xpu" in device else torch.float32
 use_flash_atten = "cuda" in device
-
-if image_ext == ".jxl":
-    import pillow_jxl # noqa: F401
-from PIL import Image # noqa: E402
+img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 
@@ -281,7 +283,7 @@ def dedupe_character_tags(split_tags: List[str]) -> List[str]:
     return deduped_tags
 
 
-def get_tags_from_json(json_path: str) -> str:
+def get_tags_from_json(json_path: str, image_path: str) -> str:
     with open(json_path, "r") as json_file:
         json_data = json.load(json_file)
 
@@ -353,7 +355,7 @@ def get_tags_from_json(json_path: str) -> str:
             if wd_tag and wd_tag not in no_shuffle_tags and wd_tag not in style_age_tags and wd_tag not in split_general_tags:
                 split_general_tags.append(wd_tag)
 
-    if json_data.get("file_ext", "jpg") not in {"png", "jxl"} and (json_data.get("file_size", float("inf")) < 307200 or os.path.getsize(os.path.splitext(json_path)[0]+image_ext) < 307200):
+    if json_data.get("file_ext", "jpg") not in {"png", "jxl"} and (json_data.get("file_size", float("inf")) < 307200 or os.path.getsize(image_path) < 307200):
         split_general_tags.append("compression_artifacts")
 
     for tag in dedupe_tags(split_general_tags):
@@ -425,7 +427,7 @@ class ImageBackend():
 
         json_path = os.path.splitext(image_path)[0]+".json"
         if os.path.exists(json_path):
-            booru_tags = get_tags_from_json(json_path)
+            booru_tags = get_tags_from_json(json_path, image_path)
             if booru_tags:
                 prompt += " These are the tags for the anime image, you can use them for guidence: " + booru_tags
         image = Image.open(image_path).convert("RGBA")
@@ -501,8 +503,10 @@ def main():
         model.language_model.generate = torch.compile(model.language_model.generate, backend="inductor")
 
 
-    print(f"Searching for {image_ext} files...")
-    file_list = glob.glob(f'./**/*{image_ext}')
+    print(f"Searching for {img_ext_list} files...")
+    file_list = []
+    for ext in img_ext_list:
+        file_list.extend(glob(f"**/*.{ext}"))
     image_paths = []
 
     for image_path in tqdm(file_list):

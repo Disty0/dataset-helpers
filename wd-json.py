@@ -2,7 +2,6 @@
 
 import os
 import gc
-import glob
 import json
 import time
 import atexit
@@ -12,21 +11,24 @@ import pandas as pd
 from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
+from glob import glob
 import onnxruntime as ort
+
+try:
+    import pillow_jxl # noqa: F401
+except Exception:
+    pass
+from PIL import Image # noqa: E402
 
 from typing import List, Tuple
 
 batch_size = 24
-image_ext = ".jxl"
 general_thresh = 0.35
 character_thresh = 0.5
 model_repo = "SmilingWolf/wd-swinv2-tagger-v3"
 MODEL_FILENAME = "model.onnx"
 LABEL_FILENAME = "selected_tags.csv"
-
-if image_ext == ".jxl":
-    import pillow_jxl # noqa: F401
-from PIL import Image # noqa: E402
+img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 
@@ -130,32 +132,43 @@ class SaveTagBackend():
             if not self.save_queue.empty():
                 predictions, image_paths = self.save_queue.get()
                 for i in range(len(image_paths)):
-                    self.save_to_file(self.get_tags(predictions[i]), os.path.splitext(image_paths[i])[0]+".json")
+                    self.save_to_file(self.get_tags(predictions[i]), image_paths[i])
             else:
                 time.sleep(0.25)
         print("Stopping the save backend threads")
 
 
-    def save_to_file(self, data: List[str], path: str) -> None:
+    def save_to_file(self, data: List[str], image_path: str) -> None:
         rating, character_strings, sorted_general_strings = data[0], data[1], data[2]
-        if os.path.exists(path):
-            with open(path, "r") as json_file:
+        base_name, file_ext = os.path.splitext(image_path)
+        file_ext = file_ext[1:]
+        json_path = base_name+".json"
+
+        if os.path.exists(json_path):
+            with open(json_path, "r") as json_file:
                 json_data = json.load(json_file)
         else:
             json_data = {}
             json_data["rating"] = rating
             json_data["tag_string_character"] = character_strings
             json_data["tag_string_general"] = sorted_general_strings
+
             json_data["tag_string_copyright"] = ""
             json_data["tag_string_artist"] = ""
             json_data["tag_string_meta"] = ""
+
             json_data["created_at"] = "none"
-            json_data["file_ext"] = image_ext[1:]
+            json_data["source"] = "wd-json.py"
+
+            json_data["file_ext"] = file_ext
+            json_data["file_size"] = os.path.getsize(image_path)
+
         json_data["wd_rating"] = rating
         json_data["wd_tag_string_character"] = character_strings
         json_data["wd_tag_string_general"] = sorted_general_strings
         #json_data["special_tags"] = "visual_novel_cg"
-        with open(path, "w") as f:
+
+        with open(json_path, "w") as f:
             json.dump(json_data, f)
 
 
@@ -240,8 +253,10 @@ def main():
     label_name = model.get_outputs()[0].name
 
 
-    print(f"Searching for {image_ext} files...")
-    file_list = glob.glob(f'**/*{image_ext}')
+    print(f"Searching for {img_ext_list} files...")
+    file_list = []
+    for ext in img_ext_list:
+        file_list.extend(glob(f"**/*.{ext}"))
     image_paths = []
 
     for image_path in tqdm(file_list):

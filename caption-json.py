@@ -4,7 +4,6 @@ import os
 import gc
 import copy
 import math
-import glob
 import json
 import time
 import atexit
@@ -54,15 +53,23 @@ except ImportError:
 from transformers import AutoModelForImageTextToText, AutoProcessor, LogitsProcessor, StaticCache, HybridCache
 from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
+from glob import glob
 from tqdm import tqdm
+
+try:
+    import pillow_jxl # noqa: F401
+except Exception:
+    pass
+from PIL import Image # noqa: E402
 
 from typing import Dict, List, Tuple, Union
 
-image_ext = ".jxl"
 max_image_size = 1048576 # 1024x1024
 max_new_tokens = 2048
 use_tunable_ops = False # Set to True for performance increase for AMD, uses quite a bit of VRAM when tuning
 use_torch_compile = False # torch.compile causes nonsense outputs
+img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
+Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 model_id = "google/gemma-3-4b-it"
 #model_id = "Qwen/Qwen2.5-VL-7B-Instruct"
@@ -128,15 +135,6 @@ if is_gemma:
 else:
     batch_size = 1
     cache_base_prompt = True
-
-if image_ext == ".jxl":
-    import pillow_jxl # noqa: F401
-from PIL import Image # noqa: E402
-Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
-
-if not use_flash_atten and "qwen2.5" in model_id_lower:
-    import transformers
-    transformers.utils.is_flash_attn_2_available = lambda: False
 
 
 meta_blacklist = (
@@ -208,6 +206,16 @@ no_shuffle_tags = (
     "5others",
     "6+others",
     "multiple_others",
+)
+
+pixiv_tag_blacklist = (
+    "girl",
+    "boy",
+    "OC",
+    "original",
+    "original character",
+    "illustration",
+    "derivative work",
 )
 
 
@@ -340,7 +348,7 @@ def dedupe_character_tags(split_tags: List[str]) -> List[str]:
     return deduped_tags
 
 
-def get_tags_from_json(json_path: str) -> Tuple[str, str]:
+def get_tags_from_json(json_path: str, image_path: str) -> Tuple[str, str]:
     with open(json_path, "r") as json_file:
         json_data = json.load(json_file)
     copyright_tags = ""
@@ -413,7 +421,8 @@ def get_tags_from_json(json_path: str) -> Tuple[str, str]:
             split_general_tags.pop(split_general_tags.index(no_shuffle_tag))
             line += f", {no_shuffle_tag.replace('_', ' ')}"
 
-    for char in dedupe_character_tags(json_data["tag_string_character"].split(" ")):
+    character_tags = json_data["tag_string_character"].split(" ")
+    for char in dedupe_character_tags(character_tags):
         if char:
             line += f", character {char.replace('_', ' ')}"
             line += f", character name {char.replace('_', ' ')}"
@@ -430,7 +439,15 @@ def get_tags_from_json(json_path: str) -> Tuple[str, str]:
             if wd_tag and wd_tag not in no_shuffle_tags and wd_tag not in style_age_tags and wd_tag not in split_general_tags:
                 split_general_tags.append(wd_tag)
 
-    if json_data.get("file_ext", "jpg") not in {"png", "jxl"} and (json_data.get("file_size", float("inf")) < 307200 or os.path.getsize(os.path.splitext(json_path)[0]+image_ext) < 307200):
+    pixiv_tags = json_data.get("pixiv_tags", [])
+    if pixiv_tags:
+        for raw_pixiv_tag in pixiv_tags:
+            if raw_pixiv_tag:
+                pixiv_tag = raw_pixiv_tag.replace(" ", "_").lower()
+                if raw_pixiv_tag.isascii() and raw_pixiv_tag not in pixiv_tag_blacklist and pixiv_tag not in no_shuffle_tags and pixiv_tag not in style_age_tags and pixiv_tag not in split_general_tags and pixiv_tag not in split_copyright_tags and pixiv_tag not in character_tags:
+                    split_general_tags.append(raw_pixiv_tag)
+
+    if json_data.get("file_ext", "jpg") not in {"png", "jxl"} and (json_data.get("file_size", float("inf")) < 307200 or os.path.getsize(image_path) < 307200):
         split_general_tags.append("compression_artifacts")
 
     for tag in dedupe_tags(split_general_tags):
@@ -499,7 +516,7 @@ class ImageBackend():
         prompt = base_prompt
         json_path = os.path.splitext(image_path)[0]+".json"
         if os.path.exists(json_path):
-            booru_tags, copyright_tags = get_tags_from_json(json_path)
+            booru_tags, copyright_tags = get_tags_from_json(json_path, image_path)
             if booru_tags:
                 if "no humans" in booru_tags:
                     prompt += " " + booru_no_humans_prompt + " " + booru_tag_prompt.format(booru_tags)
@@ -647,8 +664,10 @@ def main():
             model.model = torch.compile(model.model, backend="inductor")
 
 
-    print(f"Searching for {image_ext} files...")
-    file_list = glob.glob(f'./**/*{image_ext}')
+    print(f"Searching for {img_ext_list} files...")
+    file_list = []
+    for ext in img_ext_list:
+        file_list.extend(glob(f"**/*.{ext}"))
     image_paths = []
 
     for image_path in tqdm(file_list):

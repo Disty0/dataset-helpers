@@ -2,21 +2,21 @@
 
 import os
 import gc
-import glob
 import time
 import json
 import atexit
 from queue import Queue
+from glob import glob
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
 
 from typing import Tuple
 
-image_ext = ".jxl"
+out_path = ""
 caption_key = "gemma-3-4b-it"
 #caption_key = "qwen2.5-vl-7b-instruct"
 #caption_key = "florence-2-base-promptgen-v1-5"
-out_path = ""
+img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 
 is_gemma = "gemma" in caption_key
 
@@ -331,8 +331,10 @@ class SaveTagBackend():
 
 def main():
     steps_after_gc = 0
-    print(f"Searching for {image_ext} files...")
-    file_list = glob.glob(f'**/*{image_ext}')
+    print(f"Searching for {img_ext_list} files...")
+    file_list = []
+    for ext in img_ext_list:
+        file_list.extend(glob(f"**/*.{ext}"))
 
     save_backend = SaveTagBackend(max_save_workers=4)
 

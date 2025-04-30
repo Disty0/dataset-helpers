@@ -2,7 +2,6 @@
 
 import os
 import gc
-import glob
 import json
 import time
 import atexit
@@ -16,22 +15,25 @@ except Exception:
 from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
 from transformers import ViTForImageClassification, ViTImageProcessor
+from glob import glob
 from tqdm import tqdm
+
+try:
+    import pillow_jxl # noqa: F401
+except Exception:
+    pass
+from PIL import Image # noqa: E402
 
 from typing import List, Tuple
 
 batch_size = 32
-image_ext = ".jxl"
 use_tunable_ops = False
 use_torch_compile = True
 device = "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
 caption_key = "aesthetic-shadow-v2"
 MODEL_REPO = "shadowlilac/aesthetic-shadow-v2"
 dtype = torch.float16 if device != "cpu" else torch.float32
-
-if image_ext == ".jxl":
-    import pillow_jxl # noqa: F401
-from PIL import Image # noqa: E402
+img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 
@@ -137,8 +139,10 @@ def main():
     elif use_torch_compile:
         model = torch.compile(model, backend="inductor")
 
-    print(f"Searching for {image_ext} files...")
-    file_list = glob.glob(f'**/*{image_ext}')
+    print(f"Searching for {img_ext_list} files...")
+    file_list = []
+    for ext in img_ext_list:
+        file_list.extend(glob(f"**/*.{ext}"))
     image_paths = []
 
     for image_path in tqdm(file_list):

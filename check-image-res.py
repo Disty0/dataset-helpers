@@ -1,19 +1,20 @@
 #!/usr/bin/env python
 
 import os
+import imagesize
 from glob import glob
 from tqdm import tqdm
 
+try:
+    import pillow_jxl # noqa: F401
+except Exception:
+    pass
+from PIL import Image # noqa: E402
+
 from typing import List, Tuple
 
-image_ext = ".jxl"
 remove_files = False
-
-if image_ext == ".jxl":
-    import pillow_jxl # noqa: F401
-else:
-    import imagesize
-from PIL import Image # noqa: E402
+img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 
@@ -199,14 +200,17 @@ def get_jxl_size(path: str) -> Tuple[int,int]:
         return decode_container(file)
 
 
-file_list = glob(f"**/*{image_ext}")
+print(f"Searching for {img_ext_list} files...")
+file_list = []
+for ext in img_ext_list:
+    file_list.extend(glob(f"**/*.{ext}"))
 
 os.makedirs("out", exist_ok=True)
-small_res_file = open("out/small_res.txt", 'a')
+small_res_file = open("out/small_res_check.txt", 'a')
 
 for image_path in tqdm(file_list):
     try:
-        if image_ext == ".jxl":
+        if os.path.splitext(image_path)[-1] == ".jxl":
             width, height = get_jxl_size(image_path)
         else:
             width, height = imagesize.get(image_path)

@@ -4,14 +4,20 @@ import os
 from glob import glob
 from tqdm import tqdm
 
-image_ext = ".jxl"
-
-if image_ext == ".jxl":
+try:
     import pillow_jxl # noqa: F401
+except Exception:
+    pass
 from PIL import Image # noqa: E402
+
+img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
-file_list = glob(f"**/*{image_ext}")
+
+print(f"Searching for {img_ext_list} files...")
+file_list = []
+for ext in img_ext_list:
+    file_list.extend(glob(f"**/*.{ext}"))
 
 for image_path in tqdm(file_list):
     try:

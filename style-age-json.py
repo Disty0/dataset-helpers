@@ -2,7 +2,6 @@
 
 import os
 import gc
-import glob
 import json
 import time
 import atexit
@@ -10,20 +9,23 @@ import huggingface_hub
 import numpy as np
 from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
+from glob import glob
 from tqdm import tqdm
 import onnxruntime as ort
+
+try:
+    import pillow_jxl # noqa: F401
+except Exception:
+    pass
+from PIL import Image # noqa: E402
 
 from typing import List, Tuple
 
 batch_size = 32
-image_ext = ".jxl"
 model_repo = "deepghs/anime_style_ages"
 MODEL_FILENAME = "mobilenetv3_v0_dist/model.onnx"
 LABEL_FILENAME = "mobilenetv3_v0_dist/meta.json"
-
-if image_ext == ".jxl":
-    import pillow_jxl # noqa: F401
-from PIL import Image # noqa: E402
+img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 
@@ -153,8 +155,10 @@ def main():
         )
 
 
-    print(f"Searching for {image_ext} files...")
-    file_list = glob.glob(f'**/*{image_ext}')
+    print(f"Searching for {img_ext_list} files...")
+    file_list = []
+    for ext in img_ext_list:
+        file_list.extend(glob(f"**/*.{ext}"))
     image_paths = []
 
     for image_path in tqdm(file_list):
