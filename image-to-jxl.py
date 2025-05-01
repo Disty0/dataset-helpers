@@ -31,10 +31,10 @@ for image_path in tqdm(file_list):
 
         if not (os.path.exists(jxl_path) and os.path.getsize(jxl_path) != 0):
             image = Image.open(image_path)
-            if resize_files:
+            if resize_files and file_ext not in {"jpg", "jpeg"}: # jpeg to lossless jpeg xl has smaller file sizes than resizing down
                 width, height = image.size
                 image_size = width * height
-                if image_size > 4194304 and file_ext not in {"jpg", "jpeg"}:
+                if image_size > 4194304:
                     scale = math.sqrt(image_size / 4194304)
                     new_width = int(width/scale)
                     new_height = int(height/scale)
