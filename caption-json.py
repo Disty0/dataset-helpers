@@ -108,27 +108,34 @@ model_param_size = int(model_id_lower.rsplit("b-", maxsplit=1)[0].rsplit("-", ma
 quantize_weights = "int8" if sdnq_available and "xpu" not in device else None
 ipex_llm_weights = "fp16"
 if ipex_llm_available:
-    if model_param_size >= device_memory:
+    if model_param_size / 4 >= device_memory:
         ipex_llm_weights = "sym_int4"
-        free_memory = (device_memory - (model_param_size / 2))
-    elif model_param_size >= device_memory / 2:
+    elif model_param_size / 2 >= device_memory:
         ipex_llm_weights = "sym_int8"
-        free_memory = (device_memory - (model_param_size))
-    elif dtype == torch.float32:
-        free_memory = (device_memory - (model_param_size * 4))
-    else:
-        free_memory = (device_memory - (model_param_size * 2))
 else:
-    if model_param_size >= device_memory:
-        quantize_weights = "int5" if sdnq_available else "int4"
-        free_memory = (device_memory - (model_param_size / 2))
-    elif model_param_size >= device_memory / 2:
+    if model_param_size / 4 >= device_memory:
+        quantize_weights = "uint4" if sdnq_available else "int4"
+    if sdnq_available and model_param_size / 3.2 >= device_memory:
+        quantize_weights = "int5"
+    if sdnq_available and model_param_size / 2.67 >= device_memory:
+        quantize_weights = "int6"
+    elif model_param_size / 2 >= device_memory:
         quantize_weights = "int8"
-        free_memory = (device_memory - (model_param_size))
-    elif dtype == torch.float32:
-        free_memory = (device_memory - (model_param_size * 4))
-    else:
-        free_memory = (device_memory - (model_param_size * 2))
+print(f"Using quantization type: {quantize_weights}")
+
+if quantize_weights in {"int4", "sym_int4"}:
+    free_memory = (device_memory - (model_param_size / 2))
+elif quantize_weights == "int5":
+    free_memory = (device_memory - (model_param_size / 1.6))
+if quantize_weights == "int6":
+    free_memory = (device_memory - (model_param_size / 1.34))
+elif quantize_weights in {"int8", "sym_int8"}:
+    free_memory = (device_memory - (model_param_size))
+elif dtype == torch.float32:
+    free_memory = (device_memory - (model_param_size * 4))
+else:
+    free_memory = (device_memory - (model_param_size * 2))
+print(f"Free memory for compute: {free_memory} GB")
 
 offload_cache = free_memory <= 2
 if is_gemma:
@@ -139,11 +146,10 @@ if is_gemma:
     batch_size -= batch_size % 2
     batch_size = max(batch_size, 1)
     cache_base_prompt = batch_size == 1 # cache fails with shape error
-    print(f"Using batch size of {batch_size}")
 else:
     batch_size = 1
     cache_base_prompt = True
-
+print(f"Using batch size: {batch_size}")
 
 if os.path.exists(tag_dict_path):
     with open(tag_dict_path, "r") as f:
