@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from typing import Dict, List, Tuple, Union
 
 import os
 import gc
@@ -62,7 +63,11 @@ except Exception:
     pass
 from PIL import Image # noqa: E402
 
-from typing import Dict, List, Tuple, Union
+try:
+    from sdnq import SDNQQuantizer, SDNQConfig
+    sdnq_available = True
+except Exception:
+    sdnq_available = False
 
 max_image_size = 1048576 # 1024x1024
 max_new_tokens = 2048
@@ -100,7 +105,7 @@ else:
 
 model_param_size = int(model_id_lower.rsplit("b-", maxsplit=1)[0].rsplit("-", maxsplit=1)[-1].replace("b",""))
 
-quanto_weights = None
+quantize_weights = "int8" if sdnq_available and "xpu" not in device else None
 ipex_llm_weights = "fp16"
 if ipex_llm_available:
     if model_param_size >= device_memory:
@@ -115,10 +120,10 @@ if ipex_llm_available:
         free_memory = (device_memory - (model_param_size * 2))
 else:
     if model_param_size >= device_memory:
-        quanto_weights = "int4"
+        quantize_weights = "int5" if sdnq_available else "int4"
         free_memory = (device_memory - (model_param_size / 2))
     elif model_param_size >= device_memory / 2:
-        quanto_weights = "int8"
+        quantize_weights = "int8"
         free_memory = (device_memory - (model_param_size))
     elif dtype == torch.float32:
         free_memory = (device_memory - (model_param_size * 4))
@@ -661,11 +666,18 @@ def main():
     if use_tunable_ops: # Uses quite a bit of vram when tuning
         torch.cuda.tunable.enable(val=True)
 
-    if quanto_weights is not None:
-        from transformers import QuantoConfig
-        quantization_config = QuantoConfig(weights=quanto_weights)
+    if quantize_weights is not None:
+        if sdnq_available:
+            import transformers
+            transformers.quantizers.auto.AUTO_QUANTIZER_MAPPING["sdnq"] = SDNQQuantizer
+            transformers.quantizers.auto.AUTO_QUANTIZATION_CONFIG_MAPPING["sdnq"] = SDNQConfig
+            quantization_config = SDNQConfig(weights_dtype=quantize_weights, use_quantized_matmul=bool("xpu" not in device))
+        else:
+            from transformers import QuantoConfig
+            quantization_config = QuantoConfig(weights=quantize_weights)
     else:
         quantization_config = None
+
     processor = AutoProcessor.from_pretrained(model_id, use_fast=True)
     if use_logits_processor:
         logits_processor = [UncensorQwen2()]
@@ -738,7 +750,7 @@ def main():
         del save_backend
     atexit.register(exit_handler, image_backend, save_backend)
 
-    with torch.inference_mode() if quanto_weights is None else torch.no_grad():
+    with torch.inference_mode() if quantize_weights is None else torch.no_grad():
         if cache_base_prompt:
             conversation = [
                 {
@@ -808,6 +820,7 @@ def main():
                     logits_processor=logits_processor,
                     past_key_values=past_key_values,
                     cache_implementation=cache_implementation,
+                    disable_compile=True,
                 )
                 generated_ids = [
                     output_ids[len(input_ids) :]
