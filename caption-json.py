@@ -699,7 +699,7 @@ def main():
 
     if ipex_llm_available:
         model = ipex_llm.optimize_model(model, low_bit=ipex_llm_weights)
-    if "xpu" in device:
+    if "xpu" in device or (sdnq_available and quantize_weights is not None):
         model = model.to(device)
 
     if use_torch_compile:
