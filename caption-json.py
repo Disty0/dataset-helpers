@@ -677,7 +677,7 @@ def main():
             import transformers
             transformers.quantizers.auto.AUTO_QUANTIZER_MAPPING["sdnq"] = SDNQQuantizer
             transformers.quantizers.auto.AUTO_QUANTIZATION_CONFIG_MAPPING["sdnq"] = SDNQConfig
-            quantization_config = SDNQConfig(weights_dtype=quantize_weights, use_quantized_matmul=bool("xpu" not in device))
+            quantization_config = SDNQConfig(weights_dtype=quantize_weights, use_quantized_matmul=bool("xpu" not in device), quantize_device=device, return_device=device)
         else:
             from transformers import QuantoConfig
             quantization_config = QuantoConfig(weights=quantize_weights)
