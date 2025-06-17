@@ -847,7 +847,7 @@ def main():
             cache_implementation = None
         else:
             past_key_values = None
-            cache_implementation = "hybrid" if is_gemma else "static"
+            cache_implementation = "hybrid" if is_gemma else None
 
         print("Starting to caption...")
         for _ in tqdm(range(epoch_len)):
