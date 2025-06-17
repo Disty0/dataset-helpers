@@ -267,8 +267,11 @@ def get_tags_from_json(json_path: str, image_path: str) -> str:
             if raw_pixiv_tag and raw_pixiv_tag not in pixiv_tag_blacklist:
                 if raw_pixiv_tag.lower().endswith("+_bookmarks"):
                     raw_pixiv_tag = raw_pixiv_tag.rsplit("_", maxsplit=2)[0]
-                pixiv_tag = tag_dict.get(raw_pixiv_tag, raw_pixiv_tag.replace(" ", "_").lower())
-                if pixiv_tag.isascii():
+                if tag_dict is not None:
+                    pixiv_tag = tag_dict.get(raw_pixiv_tag, raw_pixiv_tag.replace(" ", "_").lower())
+                else:
+                    pixiv_tag = raw_pixiv_tag.replace(" ", "_").lower()
+                if tag_categories is not None and pixiv_tag.isascii():
                     pixiv_tag_category = tag_categories.get(pixiv_tag, 0)
                     if pixiv_tag_category == 0 and pixiv_tag not in split_general_tags:
                         split_general_tags.append(pixiv_tag)
@@ -279,6 +282,8 @@ def get_tags_from_json(json_path: str, image_path: str) -> str:
                     elif pixiv_tag_category == 5 and pixiv_tag not in split_meta_tags:
                         split_meta_tags.append(pixiv_tag)
                         split_raw_meta_tags.append(pixiv_tag)
+                elif pixiv_tag.isascii():
+                    split_general_tags.append(pixiv_tag)
 
     if no_non_general_tags:
         line = ""
