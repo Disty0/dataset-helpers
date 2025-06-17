@@ -71,6 +71,7 @@ except Exception:
 
 max_image_size = 1048576 # 1024x1024
 max_new_tokens = 2048
+max_input_tokens = 1280
 use_tunable_ops = False # Set to True for performance increase for AMD, uses quite a bit of VRAM when tuning
 use_torch_compile = False # torch.compile causes nonsense outputs
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
@@ -137,6 +138,7 @@ elif dtype == torch.float32:
     free_memory = (device_memory - (model_param_size * 4))
 else:
     free_memory = (device_memory - (model_param_size * 2))
+free_memory = max(free_memory, 0)
 print(f"Free memory for compute: {free_memory} GB")
 
 offload_cache = free_memory <= 2
@@ -558,7 +560,23 @@ class ImageBackend():
                 for batch in batches:
                     image, prompt, char_tag = self.load_from_file(batch)
                     images.append((image,)) # has to be a list of lists for batch size > 1
-                    prompts.append(prompt)
+                    prompt = self.processor.decode(self.processor(text=prompt, images=None, add_special_tokens=False, truncation=True, max_length=max_input_tokens)["input_ids"][0])
+                    conversation = [
+                        {
+                            "role": "system",
+                            "content": [
+                                {"type": "text", "text": system_prompt}
+                            ],
+                        },
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {"type": "image"},
+                            ],
+                        }
+                    ]
+                    prompts.append(self.processor.apply_chat_template(conversation, add_generation_prompt=True))
                     if char_tag:
                         copyright_tags += " " + char_tag
                 if copyright_tags and copyright_tags[0] == " ":
@@ -583,29 +601,13 @@ class ImageBackend():
                     prompt += " " + booru_no_humans_prompt + " " + booru_tag_prompt.format(booru_tags)
                 else:
                     prompt += " " + booru_char_prompt
-                    if len(character_features.keys()) > 0:
+                    if len(character_features.keys()) > 1:
                         prompt += "\n" + booru_char_features_prompt + "\n"
                         for char, tags in character_features.items():
                             prompt += char + ": " + tags + "\n"
                         prompt += booru_tag_prompt.format(booru_tags)
                     else:
                         prompt += "\n" + booru_tag_prompt.format(booru_tags)
-        conversation = [
-            {
-                "role": "system",
-                "content": [
-                    {"type": "text", "text": system_prompt}
-                ],
-            },
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image"},
-                ],
-            }
-        ]
-        text_prompt = self.processor.apply_chat_template(conversation, add_generation_prompt=True)
         image = Image.open(image_path)
         width, height = image.size
         image_size = width * height
@@ -616,7 +618,7 @@ class ImageBackend():
             image = image.resize((new_width, new_height), Image.BICUBIC)
         background = Image.new('RGBA', image.size, (255, 255, 255))
         image = Image.alpha_composite(background, image.convert("RGBA")).convert("RGB")
-        return (image, text_prompt, copyright_tags)
+        return (image, prompt, copyright_tags)
 
 
 class SaveCaptionBackend():
@@ -781,6 +783,11 @@ def main():
         save_backend.save_thread.shutdown(wait=True)
         del save_backend
     atexit.register(exit_handler, image_backend, save_backend)
+
+    gc.collect()
+    if "cpu" not in device:
+        getattr(torch, torch.device(device).type).synchronize()
+        getattr(torch, torch.device(device).type).empty_cache()
 
     with torch.inference_mode() if quantize_weights is None else torch.no_grad():
         if cache_base_prompt:
