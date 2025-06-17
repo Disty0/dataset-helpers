@@ -74,6 +74,7 @@ max_new_tokens = 2048
 max_input_tokens = 1280
 use_tunable_ops = False # Set to True for performance increase for AMD, uses quite a bit of VRAM when tuning
 use_torch_compile = False # torch.compile causes nonsense outputs
+cache_base_prompt = False
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
@@ -165,10 +166,8 @@ if is_gemma:
         batch_size = int((free_memory * 4) / math.sqrt(model_param_size))
     batch_size -= batch_size % 2
     batch_size = max(batch_size, 1)
-    cache_base_prompt = batch_size == 1 # cache fails with shape error
 else:
     batch_size = 1
-    cache_base_prompt = True
 print(f"Using batch size: {batch_size}")
 
 if os.path.exists(tag_dict_path):
