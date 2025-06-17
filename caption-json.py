@@ -497,7 +497,6 @@ def get_tags_from_json(json_path: str, image_path: str) -> str:
                         feature_tags += f", {tag.replace('_', ' ') if len(tag) > 3 else tag}"
                     character_features[char.replace('_', ' ')] = feature_tags[2:]
             line += f", character {char.replace('_', ' ')}"
-            line += f", character name {char.replace('_', ' ')}"
 
     if "original" in split_copyright_tags:
         split_copyright_tags.pop(split_copyright_tags.index("original"))
