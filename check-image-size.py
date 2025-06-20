@@ -2,6 +2,7 @@
 
 import os
 import math
+import json
 import imagesize
 from glob import glob
 from tqdm import tqdm
@@ -214,9 +215,13 @@ big_file = open("out/big_check.txt", 'a')
 for image_path in tqdm(file_list):
     try:
         if os.path.getsize(image_path) < 102400:
-            if remove_files:
-                os.remove(image_path)
-            small_file.write(image_path+"\n")
+            json_path = os.path.splitext(image_path)[0] + ".json"
+            with open(json_path, "r") as f:
+                json_data = json.load(f)
+            if "pixel_art" not in json_data["tag_string_general"].split(" ") and "pixel_art" not in json_data.get("wd_tag_string_general", "").split(" "):
+                if remove_files:
+                    os.remove(image_path)
+                small_file.write(image_path+"\n")
         elif os.path.getsize(image_path) > 10240000:
             if os.path.splitext(image_path)[-1] == ".jxl":
                 width, height = get_jxl_size(image_path)

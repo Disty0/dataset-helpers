@@ -139,6 +139,7 @@ for id in tqdm(id_list):
         height = int(image_data["image_height"])
         image_size = width * height
         general_tags = image_data["tag_string_general"].split(" ")
+        general_tags.extend(image_data.get("wd_tag_string_general", "").split(" "))
         is_pixel_art = "pixel_art" in general_tags
 
         if (image_data["file_ext"] not in {"avif", "avi", "gif", "html", "mp3", "mp4", "mpg", "pdf", "rar", "swf", "webm", "wmv", "zip"}
