@@ -142,7 +142,8 @@ for id in tqdm(id_list):
         general_tags.extend(image_data.get("wd_tag_string_general", "").split(" "))
         is_pixel_art = "pixel_art" in general_tags
 
-        if (image_data["file_ext"] not in {"avif", "avi", "gif", "html", "mp3", "mp4", "mpg", "pdf", "rar", "swf", "webm", "wmv", "zip"}
+        if (image_data.get("file_url", None) is not None
+        and image_data["file_ext"] not in {"avif", "avi", "gif", "html", "mp3", "mp4", "mpg", "pdf", "rar", "swf", "webm", "wmv", "zip"}
         and (image_data["file_size"] > 102400 or is_pixel_art)
         and (image_size > 768000 or is_pixel_art)
         and image_size > 768000
