@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
 import os
+import math
+import json
 import imagesize
 from glob import glob
 from tqdm import tqdm
@@ -14,6 +16,7 @@ from PIL import Image # noqa: E402
 from typing import List, Tuple
 
 remove_files = False
+resize_pixel_art = False
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
@@ -207,6 +210,7 @@ for ext in img_ext_list:
 
 os.makedirs("out", exist_ok=True)
 small_res_file = open("out/small_res_check.txt", 'a')
+small_res_pixel_art_file = open("out/small_res_pixel_art.txt", 'a')
 
 for image_path in tqdm(file_list):
     try:
@@ -216,9 +220,25 @@ for image_path in tqdm(file_list):
             width, height = imagesize.get(image_path)
         image_size = width * height
         if image_size < 768000: # 600x1280
-            if remove_files:
-                os.remove(image_path)
-            small_res_file.write(image_path+"\n")
+            json_path = os.path.splitext(image_path)[0] + ".json"
+            with open(json_path, "r") as f:
+                json_data = json.load(f)
+            if "pixel_art" not in json_data["tag_string_general"].split(" ") and "pixel_art" not in json_data.get("wd_tag_string_general", "").split(" "):
+                if remove_files:
+                    os.remove(image_path)
+                small_res_file.write(image_path+"\n")
+            else:
+                if resize_pixel_art:
+                    image = Image.open(image_path)
+                    width, height = image.size
+                    image_size = width * height
+                    scale = math.sqrt(image_size / 1048576)
+                    new_width = int(width/scale)
+                    new_height = int(height/scale)
+                    image = image.convert("RGBA").resize((new_width, new_height), Image.NEAREST)
+                    image.save(image_path, lossless=True)
+                    image.close()
+                small_res_pixel_art_file.write(image_path+"\n")
     except Exception as e:
         os.makedirs("errors", exist_ok=True)
         error_file = open("errors/errors.txt", 'a')

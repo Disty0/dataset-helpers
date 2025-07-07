@@ -178,7 +178,7 @@ for id in tqdm(id_list):
                         scale = math.sqrt(image_size / 1048576)
                         new_width = int(width/scale)
                         new_height = int(height/scale)
-                        image = image.resize((new_width, new_height), Image.NEAREST)
+                        image = image.convert("RGBA").resize((new_width, new_height), Image.NEAREST)
                 image.save(image_path, lossless=True, lossless_jpeg=True)
                 image.close()
                 if jpg_path is not None and os.path.exists(jpg_path):
