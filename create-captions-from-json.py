@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Tuple
 
 out_path = ""
-caption_key = "gemma-3-4b-it"
+caption_key = "gemma-3n-e4b-it"
 #caption_key = "qwen2.5-vl-7b-instruct"
 #caption_key = "florence-2-base-promptgen-v1-5"
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")

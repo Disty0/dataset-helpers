@@ -78,7 +78,7 @@ cache_base_prompt = False
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
-model_id = "google/gemma-3-4b-it"
+model_id = "google/gemma-3n-E4B-it"
 #model_id = "Qwen/Qwen2.5-VL-7B-Instruct"
 
 tag_dict_path = os.path.join(os.path.dirname(__file__), "tag_dict.json")
@@ -109,7 +109,11 @@ else:
     device_memory = math.ceil(getattr(torch, torch.device(device).type).get_device_properties(device).total_memory / 1024 / 1024 / 1024)
 print(f"Device memory: {device_memory} GB")
 
-model_param_size = int(model_id_lower.rsplit("b-", maxsplit=1)[0].rsplit("-", maxsplit=1)[-1].replace("b",""))
+model_param_size = model_id_lower.rsplit("b-", maxsplit=1)[0].rsplit("-", maxsplit=1)[-1].replace("b","")
+if model_param_size.startswith("e"):
+    model_param_size = int(model_param_size.replace("e","")) * 2
+else:
+    model_param_size = int(model_param_size)
 print(f"Model parameter size: {model_param_size} B")
 
 quantize_weights = "int8" if sdnq_available and "xpu" not in device else None
@@ -716,14 +720,15 @@ def main():
         torch.cuda.tunable.enable(val=True)
 
     if quantize_weights is not None:
+        modules_to_not_convert = ["correction_coefs", "prediction_coefs", "lm_head", "embedding_projection"]
         if sdnq_available:
             import transformers
             transformers.quantizers.auto.AUTO_QUANTIZER_MAPPING["sdnq"] = SDNQQuantizer
             transformers.quantizers.auto.AUTO_QUANTIZATION_CONFIG_MAPPING["sdnq"] = SDNQConfig
-            quantization_config = SDNQConfig(weights_dtype=quantize_weights, use_quantized_matmul=bool("xpu" not in device), quantize_device=device, return_device=device)
+            quantization_config = SDNQConfig(weights_dtype=quantize_weights, use_quantized_matmul=bool("xpu" not in device), quantize_device=device, return_device=device, modules_to_not_convert=modules_to_not_convert)
         else:
             from transformers import QuantoConfig
-            quantization_config = QuantoConfig(weights=quantize_weights)
+            quantization_config = QuantoConfig(weights=quantize_weights, modules_to_not_convert=modules_to_not_convert)
     else:
         quantization_config = None
 
@@ -734,7 +739,7 @@ def main():
         logits_processor = None
     model = AutoModelForImageTextToText.from_pretrained(
         model_id, torch_dtype=dtype, device_map=device if "xpu" not in device else "cpu", # xpu hits the 4gb alloc limit
-        attn_implementation="flash_attention_2" if use_flash_atten else "sdpa",
+        attn_implementation="flash_attention_2" if use_flash_atten else None,
         quantization_config=quantization_config,
     ).eval()
     model.requires_grad_(False)
@@ -804,7 +809,7 @@ def main():
         getattr(torch, torch.device(device).type).synchronize()
         getattr(torch, torch.device(device).type).empty_cache()
 
-    with torch.inference_mode() if quantize_weights is None else torch.no_grad():
+    with torch.inference_mode() if (sdnq_available or quantize_weights is None) else torch.no_grad():
         if cache_base_prompt:
             conversation = [
                 {
@@ -874,7 +879,6 @@ def main():
                     logits_processor=logits_processor,
                     past_key_values=past_key_values,
                     cache_implementation=cache_implementation,
-                    disable_compile=True,
                 )
                 generated_ids = [
                     output_ids[len(input_ids) :]
