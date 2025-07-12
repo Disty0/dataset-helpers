@@ -879,6 +879,7 @@ def main():
                     logits_processor=logits_processor,
                     past_key_values=past_key_values,
                     cache_implementation=cache_implementation,
+                    disable_compile=True,
                 )
                 generated_ids = [
                     output_ids[len(input_ids) :]
