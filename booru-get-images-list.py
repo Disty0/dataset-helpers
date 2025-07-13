@@ -25,10 +25,11 @@ parser.add_argument('list', type=str)
 args = parser.parse_args()
 
 general_blacklist = (
+    "what",
     "comic",
     "text_focus",
     "realistic",
-    "what",
+    "photorealistic",
     "misplaced_genitals",
     "anatomical_nonsense",
     "engineering_nonsense",
