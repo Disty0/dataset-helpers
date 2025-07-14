@@ -562,13 +562,12 @@ class ImageBackend():
         for _ in range(max_load_workers):
             self.load_thread.submit(self.load_thread_func)
 
-
     def get_images(self) -> Tuple[List[Dict[str, torch.Tensor]], List[str], str]:
         result = self.load_queue.get()
         self.load_queue_lenght -= 1
         return result
 
-
+    @torch.inference_mode()
     def load_thread_func(self) -> None:
         while self.keep_loading:
             if self.load_queue_lenght >= self.max_load_queue_lenght:
@@ -609,7 +608,6 @@ class ImageBackend():
             else:
                 time.sleep(5)
         print("Stopping the image loader threads")
-
 
     def load_from_file(self, image_path: str) -> Tuple[Image.Image, str, str]:
         copyright_tags = ""
@@ -652,11 +650,10 @@ class SaveCaptionBackend():
         for _ in range(max_save_workers):
             self.save_thread.submit(self.save_thread_func)
 
-
     def save(self, generated_ids: Union[List[List[int]], torch.Tensor], image_paths: List[str]) -> None:
         self.save_queue.put((generated_ids, image_paths))
 
-
+    @torch.inference_mode()
     def save_thread_func(self) -> None:
         while self.keep_saving:
             if not self.save_queue.empty():
@@ -669,7 +666,6 @@ class SaveCaptionBackend():
             else:
                 time.sleep(0.25)
         print("Stopping the save backend threads")
-
 
     def save_to_file(self, data: str, path: str) -> None:
         if data:
@@ -707,6 +703,7 @@ class UncensorQwen2(LogitsProcessor):
         return scores
 
 
+@torch.inference_mode()
 def main():
     steps_after_gc = -1
     global input_ids_len, copyright_tags, processor
@@ -812,96 +809,95 @@ def main():
         getattr(torch, device.type).synchronize()
         getattr(torch, device.type).empty_cache()
 
-    with torch.inference_mode() if (sdnq_available or quantize_weights is None) else torch.no_grad():
-        if cache_base_prompt:
-            conversation = [
-                {
-                    "role": "system",
-                    "content": [
-                        {"type": "text", "text": system_prompt}
-                    ],
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": base_prompt},
-                    ],
-                }
+    if cache_base_prompt:
+        conversation = [
+            {
+                "role": "system",
+                "content": [
+                    {"type": "text", "text": system_prompt}
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": base_prompt},
+                ],
+            }
+        ]
+
+        text_input = processor.apply_chat_template(conversation, add_generation_prompt=False)
+        if is_gemma:
+            text_input = text_input.removesuffix("<end_of_turn>\n")
+            prompt_cache = HybridCache(config=model.language_model.config, max_batch_size=batch_size, max_cache_len=max_new_tokens, device=device, dtype=dtype)
+        else:
+            text_input = text_input.removesuffix("<|im_end|>\n")
+            prompt_cache = StaticCache(config=model.model.config, max_batch_size=batch_size, max_cache_len=max_new_tokens, device=device, dtype=dtype)
+
+        print("Caching base prompts...")
+        inputs = processor(text=[text_input] * batch_size, images=None, padding="longest", return_tensors="pt").to(device)
+        prompt_cache = model(**inputs, use_cache=True, past_key_values=prompt_cache).past_key_values
+
+        if offload_cache:
+            for i in range(len(prompt_cache.key_cache)):
+                prompt_cache.key_cache[i] = prompt_cache.key_cache[i].to("cpu")
+                prompt_cache.value_cache[i] = prompt_cache.value_cache[i].to("cpu")
+
+        gc.collect()
+        if device.type != "cpu":
+            getattr(torch, device.type).synchronize()
+            getattr(torch, device.type).empty_cache()
+
+        model.generation_config.update(cache_implementation=None)
+        cache_implementation = None
+    else:
+        past_key_values = None
+        cache_implementation = "hybrid" if is_gemma else None
+
+    print("Starting to caption...")
+    for _ in tqdm(range(epoch_len)):
+        try:
+            if use_torch_compile:
+                torch.compiler.cudagraph_mark_step_begin()
+            inputs, image_paths, copyright_tags = image_backend.get_images()
+            inputs = inputs.to(device)
+            input_ids_len = inputs["input_ids"].shape[-1]
+
+            if cache_base_prompt:
+                past_key_values = copy.deepcopy(prompt_cache)
+                if offload_cache:
+                    for i in range(len(past_key_values.key_cache)):
+                        past_key_values.key_cache[i] = past_key_values.key_cache[i].to(device)
+                        past_key_values.value_cache[i] = past_key_values.value_cache[i].to(device)
+
+            output_ids = model.generate(
+                **inputs,
+                use_cache=True,
+                do_sample=False,
+                repetition_penalty=1.025,
+                max_new_tokens=max_new_tokens,
+                logits_processor=logits_processor,
+                past_key_values=past_key_values,
+                cache_implementation=cache_implementation,
+                #disable_compile=True,
+            )
+            generated_ids = [
+                output_ids[len(input_ids) :]
+                for input_ids, output_ids in zip(inputs.input_ids, output_ids)
             ]
-
-            text_input = processor.apply_chat_template(conversation, add_generation_prompt=False)
-            if is_gemma:
-                text_input = text_input.removesuffix("<end_of_turn>\n")
-                prompt_cache = HybridCache(config=model.language_model.config, max_batch_size=batch_size, max_cache_len=max_new_tokens, device=device, dtype=dtype)
-            else:
-                text_input = text_input.removesuffix("<|im_end|>\n")
-                prompt_cache = StaticCache(config=model.model.config, max_batch_size=batch_size, max_cache_len=max_new_tokens, device=device, dtype=dtype)
-
-            print("Caching base prompts...")
-            inputs = processor(text=[text_input] * batch_size, images=None, padding="longest", return_tensors="pt").to(device)
-            prompt_cache = model(**inputs, use_cache=True, past_key_values=prompt_cache).past_key_values
-
-            if offload_cache:
-                for i in range(len(prompt_cache.key_cache)):
-                    prompt_cache.key_cache[i] = prompt_cache.key_cache[i].to("cpu")
-                    prompt_cache.value_cache[i] = prompt_cache.value_cache[i].to("cpu")
-
+            save_backend.save(generated_ids, image_paths)
+        except Exception as e:
+            print(f"ERROR: {image_paths} MESSAGE: {e}")
+            os.makedirs("errors", exist_ok=True)
+            error_file = open("errors/errors.txt", 'a')
+            error_file.write(f"ERROR: {image_paths} MESSAGE: {e} \n")
+            error_file.close()
+        steps_after_gc = steps_after_gc + 1
+        if steps_after_gc == 0 or steps_after_gc >= 16:
             gc.collect()
             if device.type != "cpu":
                 getattr(torch, device.type).synchronize()
                 getattr(torch, device.type).empty_cache()
-
-            model.generation_config.update(cache_implementation=None)
-            cache_implementation = None
-        else:
-            past_key_values = None
-            cache_implementation = "hybrid" if is_gemma else None
-
-        print("Starting to caption...")
-        for _ in tqdm(range(epoch_len)):
-            try:
-                if use_torch_compile:
-                    torch.compiler.cudagraph_mark_step_begin()
-                inputs, image_paths, copyright_tags = image_backend.get_images()
-                inputs = inputs.to(device)
-                input_ids_len = inputs["input_ids"].shape[-1]
-
-                if cache_base_prompt:
-                    past_key_values = copy.deepcopy(prompt_cache)
-                    if offload_cache:
-                        for i in range(len(past_key_values.key_cache)):
-                            past_key_values.key_cache[i] = past_key_values.key_cache[i].to(device)
-                            past_key_values.value_cache[i] = past_key_values.value_cache[i].to(device)
-
-                output_ids = model.generate(
-                    **inputs,
-                    use_cache=True,
-                    do_sample=False,
-                    repetition_penalty=1.025,
-                    max_new_tokens=max_new_tokens,
-                    logits_processor=logits_processor,
-                    past_key_values=past_key_values,
-                    cache_implementation=cache_implementation,
-                    #disable_compile=True,
-                )
-                generated_ids = [
-                    output_ids[len(input_ids) :]
-                    for input_ids, output_ids in zip(inputs.input_ids, output_ids)
-                ]
-                save_backend.save(generated_ids, image_paths)
-            except Exception as e:
-                print(f"ERROR: {image_paths} MESSAGE: {e}")
-                os.makedirs("errors", exist_ok=True)
-                error_file = open("errors/errors.txt", 'a')
-                error_file.write(f"ERROR: {image_paths} MESSAGE: {e} \n")
-                error_file.close()
-            steps_after_gc = steps_after_gc + 1
-            if steps_after_gc == 0 or steps_after_gc >= 16:
-                gc.collect()
-                if device.type != "cpu":
-                    getattr(torch, device.type).synchronize()
-                    getattr(torch, device.type).empty_cache()
-                steps_after_gc = 1 if steps_after_gc == 0 else 0
+            steps_after_gc = 1 if steps_after_gc == 0 else 0
 
     atexit.unregister(exit_handler)
     exit_handler(image_backend, save_backend)

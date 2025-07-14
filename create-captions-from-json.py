@@ -303,10 +303,8 @@ class SaveTagBackend():
         for _ in range(max_save_workers):
             self.save_thread.submit(self.save_thread_func)
 
-
     def save(self, data: str, path: str) -> None:
         self.save_queue.put((data,path))
-
 
     def save_thread_func(self) -> None:
         while self.keep_saving:
@@ -316,7 +314,6 @@ class SaveTagBackend():
             else:
                 time.sleep(0.1)
         print("Stopping the save backend threads")
-
 
     def save_to_file(self, data: str, path: str) -> None:
         if data:

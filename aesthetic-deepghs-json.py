@@ -47,12 +47,10 @@ class ImageBackend():
         for _ in range(max_load_workers):
             self.load_thread.submit(self.load_thread_func)
 
-
     def get_images(self) -> Tuple[np.ndarray, List[str]]:
         result = self.load_queue.get()
         self.load_queue_lenght -= 1
         return result
-
 
     def load_thread_func(self) -> None:
         while self.keep_loading:
@@ -70,7 +68,6 @@ class ImageBackend():
             else:
                 time.sleep(5)
         print("Stopping the image loader threads")
-
 
     def load_from_file(self, image_path: str) -> np.ndarray:
         image = Image.open(image_path).convert("RGBA")
@@ -96,10 +93,8 @@ class SaveTagBackend():
         for _ in range(max_save_workers):
             self.save_thread.submit(self.save_thread_func)
 
-
     def save(self, data: np.ndarray, path: List[str]) -> None:
         self.save_queue.put((data,path))
-
 
     def save_thread_func(self) -> None:
         while self.keep_saving:
@@ -111,7 +106,6 @@ class SaveTagBackend():
                 time.sleep(0.25)
         print("Stopping the save backend threads")
 
-
     def save_to_file(self, data: Tuple[str, float], path: str) -> None:
         with open(path, "r") as json_file:
             json_data = json.load(json_file)
@@ -119,7 +113,6 @@ class SaveTagBackend():
         json_data[MODEL_NAME+"_percentile"] = data[1]
         with open(path, "w") as f:
             json.dump(json_data, f)
-
 
     def get_tags(self, predictions: np.ndarray) -> Tuple[str, float]:
         values = dict(zip(self.model_config["labels"], map(lambda x: x.item(), predictions)))
@@ -225,15 +218,15 @@ def main():
     atexit.register(exit_handler, image_backend, save_backend)
 
     for _ in tqdm(range(epoch_len)):
-        #try:
-        images, image_paths = image_backend.get_images()
-        predictions = model.run(['output'], {'input': images})[0]
-        save_backend.save(predictions, image_paths)
-        """except Exception as e:
+        try:
+            images, image_paths = image_backend.get_images()
+            predictions = model.run(['output'], {'input': images})[0]
+            save_backend.save(predictions, image_paths)
+        except Exception as e:
             os.makedirs("errors", exist_ok=True)
             error_file = open("errors/errors.txt", 'a')
             error_file.write(f"ERROR: {image_paths} MESSAGE: {e} \n")
-            error_file.close()"""
+            error_file.close()
         steps_after_gc = steps_after_gc + 1
         if steps_after_gc == 0 or steps_after_gc >= 10000:
             gc.collect()

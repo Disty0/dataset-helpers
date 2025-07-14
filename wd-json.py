@@ -56,12 +56,10 @@ class ImageBackend():
         for _ in range(max_load_workers):
             self.load_thread.submit(self.load_thread_func)
 
-
     def get_images(self) -> Tuple[np.ndarray, List[str]]:
         result = self.load_queue.get()
         self.load_queue_lenght -= 1
         return result
-
 
     def load_thread_func(self) -> None:
         while self.keep_loading:
@@ -79,7 +77,6 @@ class ImageBackend():
             else:
                 time.sleep(5)
         print("Stopping the image loader threads")
-
 
     def load_from_file(self, image_path: str) -> np.ndarray:
         image = Image.open(image_path).convert("RGBA")
@@ -103,7 +100,6 @@ class ImageBackend():
 
         # Convert to numpy array
         image_array = np.asarray(padded_image, dtype=np.float32)
-
         # Convert PIL-native RGB to BGR
         image_array = image_array[:, :, ::-1]
 
@@ -122,10 +118,8 @@ class SaveTagBackend():
         for _ in range(max_save_workers):
             self.save_thread.submit(self.save_thread_func)
 
-
     def save(self, data: np.ndarray, path: List[str]) -> None:
         self.save_queue.put((data,path))
-
 
     def save_thread_func(self) -> None:
         while self.keep_saving:
@@ -136,7 +130,6 @@ class SaveTagBackend():
             else:
                 time.sleep(0.25)
         print("Stopping the save backend threads")
-
 
     def save_to_file(self, data: List[str], image_path: str) -> None:
         rating, character_strings, sorted_general_strings = data[0], data[1], data[2]
@@ -170,7 +163,6 @@ class SaveTagBackend():
 
         with open(json_path, "w") as f:
             json.dump(json_data, f)
-
 
     def get_tags(self, predictions: np.ndarray) -> Tuple[str, str, str]:
         labels = list(zip(self.tag_names, predictions.astype(float)))

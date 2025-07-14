@@ -76,13 +76,12 @@ class ImageBackend():
         for _ in range(max_load_workers):
             self.load_thread.submit(self.load_thread_func)
 
-
     def get_images(self) -> Tuple[torch.FloatTensor, List[str]]:
         result = self.load_queue.get()
         self.load_queue_lenght -= 1
         return result
 
-
+    @torch.no_grad()
     def load_thread_func(self) -> None:
         while self.keep_loading:
             if self.load_queue_lenght >= self.max_load_queue_lenght:
@@ -99,7 +98,6 @@ class ImageBackend():
                 time.sleep(5)
         print("Stopping the image loader threads")
 
-
     def load_from_file(self, image_path: str) -> Image.Image:
         image = Image.open(image_path).convert("RGBA")
         background = Image.new('RGBA', image.size, (255, 255, 255))
@@ -115,11 +113,10 @@ class SaveAestheticBackend():
         for _ in range(max_save_workers):
             self.save_thread.submit(self.save_thread_func)
 
-
     def save(self, data: torch.FloatTensor, path: List[str]) -> None:
         self.save_queue.put((data,path))
 
-
+    @torch.no_grad()
     def save_thread_func(self) -> None:
         while self.keep_saving:
             if not self.save_queue.empty():
@@ -130,7 +127,6 @@ class SaveAestheticBackend():
                 time.sleep(0.25)
         print("Stopping the save backend threads")
 
-
     def save_to_file(self, data: float, path: str):
         with open(path, "r") as f:
             json_data = json.load(f)
@@ -139,6 +135,7 @@ class SaveAestheticBackend():
             json.dump(json_data, f)
 
 
+@torch.no_grad()
 def main():
     steps_after_gc = -1
 
@@ -222,26 +219,25 @@ def main():
         del save_backend
     atexit.register(exit_handler, image_backend, save_backend)
 
-    with torch.no_grad():
-        for _ in tqdm(range(epoch_len)):
-            try:
-                inputs, image_paths = image_backend.get_images()
-                image_embeds = clipmodel.get_image_features(pixel_values=inputs.to(device))
-                image_embeds = image_embeds / torch.linalg.norm(image_embeds, dim=1).unsqueeze(-1)
-                predictions = aes_model(image_embeds)
-                save_backend.save(predictions, image_paths)
-            except Exception as e:
-                os.makedirs("errors", exist_ok=True)
-                error_file = open("errors/errors.txt", 'a')
-                error_file.write(f"ERROR: {image_paths} MESSAGE: {e} \n")
-                error_file.close()
-            steps_after_gc = steps_after_gc + 1
-            if steps_after_gc == 0 or steps_after_gc >= 10000:
-                gc.collect()
-                if device.type != "cpu":
-                    getattr(torch, device.type).synchronize()
-                    getattr(torch, device.type).empty_cache()
-                steps_after_gc = 1 if steps_after_gc == 0 else 0
+    for _ in tqdm(range(epoch_len)):
+        try:
+            inputs, image_paths = image_backend.get_images()
+            image_embeds = clipmodel.get_image_features(pixel_values=inputs.to(device))
+            image_embeds = image_embeds / torch.linalg.norm(image_embeds, dim=1).unsqueeze(-1)
+            predictions = aes_model(image_embeds)
+            save_backend.save(predictions, image_paths)
+        except Exception as e:
+            os.makedirs("errors", exist_ok=True)
+            error_file = open("errors/errors.txt", 'a')
+            error_file.write(f"ERROR: {image_paths} MESSAGE: {e} \n")
+            error_file.close()
+        steps_after_gc = steps_after_gc + 1
+        if steps_after_gc == 0 or steps_after_gc >= 10000:
+            gc.collect()
+            if device.type != "cpu":
+                getattr(torch, device.type).synchronize()
+                getattr(torch, device.type).empty_cache()
+            steps_after_gc = 1 if steps_after_gc == 0 else 0
 
     atexit.unregister(exit_handler)
     exit_handler(image_backend, save_backend)
