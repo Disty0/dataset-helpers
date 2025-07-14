@@ -56,9 +56,9 @@ use_torch_compile = False
 caption_key = "florence-2-base-promptgen-v1-5"
 model_id = "MiaoshouAI/Florence-2-base-PromptGen-v1.5"
 revision = "c06a5f02cc6071a5d65ee5d294cf3732d3097540"
-device = "cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu"
-dtype = torch.float16 if "cuda" in device else torch.bfloat16 if "xpu" in device else torch.float32
-use_flash_atten = "cuda" in device
+device = torch.device("cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu")
+dtype = torch.float16 if device.type == "cuda" else torch.bfloat16 if device.type == "xpu" else torch.float32
+use_flash_atten = device.type == "cuda"
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
@@ -582,9 +582,9 @@ def main():
             steps_after_gc = steps_after_gc + 1
             if steps_after_gc == 0 or steps_after_gc >= 10000:
                 gc.collect()
-                if "cpu" not in device:
-                    getattr(torch, torch.device(device).type).synchronize()
-                    getattr(torch, torch.device(device).type).empty_cache()
+                if device.type != "cpu":
+                    getattr(torch, device.type).synchronize()
+                    getattr(torch, device.type).empty_cache()
                 steps_after_gc = 1 if steps_after_gc == 0 else 0
 
     atexit.unregister(exit_handler)

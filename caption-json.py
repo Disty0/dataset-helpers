@@ -95,18 +95,18 @@ booru_no_humans_prompt = "There are no humans in this image, don't mention human
 
 model_id_lower = model_id.lower()
 caption_key = model_id_lower.split("/", maxsplit=1)[-1]
-device = "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
-dtype = torch.bfloat16 if (not ipex_llm_available and device != "cpu") else torch.float16 if ipex_llm_available else torch.float32
-use_flash_atten = "cuda" in device and torch.version.cuda
+device = torch.device("xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
+dtype = torch.bfloat16 if (not ipex_llm_available and device.type != "cpu") else torch.float16 if ipex_llm_available else torch.float32
+use_flash_atten = device.type == "cuda" and torch.version.cuda
 use_logits_processor = "qwen2" in model_id_lower
 is_gemma = "gemma" in model_id_lower
 
 
-if device == "cpu":
+if device.type == "cpu":
     import psutil
     device_memory = math.ceil(psutil.virtual_memory().available / 1024 / 1024 / 1024)
 else:
-    device_memory = math.ceil(getattr(torch, torch.device(device).type).get_device_properties(device).total_memory / 1024 / 1024 / 1024)
+    device_memory = math.ceil(getattr(torch, device.type).get_device_properties(device).total_memory / 1024 / 1024 / 1024)
 print(f"Device memory: {device_memory} GB")
 
 model_param_size = model_id_lower.rsplit("b-", maxsplit=1)[0].rsplit("-", maxsplit=1)[-1].replace("b","")
@@ -114,9 +114,11 @@ if model_param_size.startswith("e"):
     model_param_size = int(model_param_size.replace("e","")) * 2
 else:
     model_param_size = int(model_param_size)
+model_param_size = model_param_size * 1.075
 print(f"Model parameter size: {model_param_size} B")
 
-quantize_weights = "int8" if sdnq_available and "xpu" not in device else None
+quantize_weights = "int8" if sdnq_available and device.type == "cuda" else None
+use_quantized_matmul = device.type == "cuda"
 ipex_llm_weights = "fp16"
 if ipex_llm_available:
     if model_param_size < device_memory:
@@ -142,6 +144,7 @@ else:
         quantize_weights = "int4"
 
 print(f"Using quantization type: {quantize_weights}")
+print(f"Use quantized MatMul: {use_quantized_matmul}")
 
 if quantize_weights == "uint3":
     free_memory = (device_memory - (model_param_size / 2.66))
@@ -725,7 +728,7 @@ def main():
             import transformers
             transformers.quantizers.auto.AUTO_QUANTIZER_MAPPING["sdnq"] = SDNQQuantizer
             transformers.quantizers.auto.AUTO_QUANTIZATION_CONFIG_MAPPING["sdnq"] = SDNQConfig
-            quantization_config = SDNQConfig(weights_dtype=quantize_weights, use_quantized_matmul=bool("xpu" not in device), quantize_device=device, return_device=device, modules_to_not_convert=modules_to_not_convert)
+            quantization_config = SDNQConfig(weights_dtype=quantize_weights, use_quantized_matmul=use_quantized_matmul, quantize_device=device, return_device=device, modules_to_not_convert=modules_to_not_convert)
         else:
             from transformers import QuantoConfig
             quantization_config = QuantoConfig(weights=quantize_weights, modules_to_not_convert=modules_to_not_convert)
@@ -738,7 +741,7 @@ def main():
     else:
         logits_processor = None
     model = AutoModelForImageTextToText.from_pretrained(
-        model_id, torch_dtype=dtype, device_map=device if "xpu" not in device else "cpu", # xpu hits the 4gb alloc limit
+        model_id, torch_dtype=dtype, device_map=device if device.type != "xpu" else "cpu", # xpu hits the 4gb alloc limit
         attn_implementation="flash_attention_2" if use_flash_atten else None,
         quantization_config=quantization_config,
     ).eval()
@@ -747,7 +750,7 @@ def main():
 
     if ipex_llm_available:
         model = ipex_llm.optimize_model(model, low_bit=ipex_llm_weights)
-    if "xpu" in device or (sdnq_available and quantize_weights is not None):
+    if device.type == "xpu" or (sdnq_available and quantize_weights is not None):
         model = model.to(device)
 
     if use_torch_compile:
@@ -805,9 +808,9 @@ def main():
     atexit.register(exit_handler, image_backend, save_backend)
 
     gc.collect()
-    if "cpu" not in device:
-        getattr(torch, torch.device(device).type).synchronize()
-        getattr(torch, torch.device(device).type).empty_cache()
+    if device.type != "cpu":
+        getattr(torch, device.type).synchronize()
+        getattr(torch, device.type).empty_cache()
 
     with torch.inference_mode() if (sdnq_available or quantize_weights is None) else torch.no_grad():
         if cache_base_prompt:
@@ -844,9 +847,9 @@ def main():
                     prompt_cache.value_cache[i] = prompt_cache.value_cache[i].to("cpu")
 
             gc.collect()
-            if "cpu" not in device:
-                getattr(torch, torch.device(device).type).synchronize()
-                getattr(torch, torch.device(device).type).empty_cache()
+            if device.type != "cpu":
+                getattr(torch, device.type).synchronize()
+                getattr(torch, device.type).empty_cache()
 
             model.generation_config.update(cache_implementation=None)
             cache_implementation = None
@@ -879,7 +882,7 @@ def main():
                     logits_processor=logits_processor,
                     past_key_values=past_key_values,
                     cache_implementation=cache_implementation,
-                    disable_compile=True,
+                    #disable_compile=True,
                 )
                 generated_ids = [
                     output_ids[len(input_ids) :]
@@ -895,9 +898,9 @@ def main():
             steps_after_gc = steps_after_gc + 1
             if steps_after_gc == 0 or steps_after_gc >= 16:
                 gc.collect()
-                if "cpu" not in device:
-                    getattr(torch, torch.device(device).type).synchronize()
-                    getattr(torch, torch.device(device).type).empty_cache()
+                if device.type != "cpu":
+                    getattr(torch, device.type).synchronize()
+                    getattr(torch, device.type).empty_cache()
                 steps_after_gc = 1 if steps_after_gc == 0 else 0
 
     atexit.unregister(exit_handler)

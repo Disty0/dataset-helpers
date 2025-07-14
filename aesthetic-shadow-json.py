@@ -29,10 +29,10 @@ from typing import List, Tuple
 batch_size = 32
 use_tunable_ops = False
 use_torch_compile = True
-device = "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
+device = torch.device("xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
 caption_key = "aesthetic-shadow-v2"
 MODEL_REPO = "shadowlilac/aesthetic-shadow-v2"
-dtype = torch.float16 if device != "cpu" else torch.float32
+dtype = torch.float16 if device.type != "cpu" else torch.float32
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
@@ -134,7 +134,7 @@ def main():
     model = model.to(device, dtype=dtype).eval()
     model.requires_grad_(False)
 
-    if device == "cpu":
+    if device.type == "cpu":
         model = torch.compile(model, backend='openvino', options = {"device" : "GPU"})
     elif use_torch_compile:
         model = torch.compile(model, backend="inductor")
@@ -197,9 +197,9 @@ def main():
             steps_after_gc = steps_after_gc + 1
             if steps_after_gc == 0 or steps_after_gc >= 10000:
                 gc.collect()
-                if "cpu" not in device:
-                    getattr(torch, torch.device(device).type).synchronize()
-                    getattr(torch, torch.device(device).type).empty_cache()
+                if device.type != "cpu":
+                    getattr(torch, device.type).synchronize()
+                    getattr(torch, device.type).empty_cache()
                 steps_after_gc = 1 if steps_after_gc == 0 else 0
 
     atexit.unregister(exit_handler)

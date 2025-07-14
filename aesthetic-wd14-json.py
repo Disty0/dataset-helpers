@@ -30,12 +30,12 @@ from typing import List, Tuple
 batch_size = 32
 use_tunable_ops = False
 use_torch_compile = True
-device = "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
+device = torch.device("xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
 caption_key = "wd-aes-b32-v0"
 MODEL_REPO = "hakurei/waifu-diffusion-v1-4"
 MODEL_FILENAME = "models/aes-B32-v0.pth"
 CLIP_REPO = "openai/clip-vit-base-patch32"
-dtype = torch.float16 if device != "cpu" else torch.float32
+dtype = torch.float16 if device.type != "cpu" else torch.float32
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
@@ -157,7 +157,7 @@ def main():
     clipmodel = CLIPModel.from_pretrained(CLIP_REPO).eval().to(device, dtype=dtype)
     clipmodel.requires_grad_(False)
 
-    if device == "cpu":
+    if device.type == "cpu":
         import openvino.properties.hint as ov_hints
         clipmodel.get_image_features = torch.compile(clipmodel.get_image_features, backend="openvino", options={"device": "GPU", "config" : {ov_hints.execution_mode : ov_hints.ExecutionMode.ACCURACY}})
     elif use_torch_compile:
@@ -173,7 +173,7 @@ def main():
         map_location="cpu"))
     aes_model = aes_model.eval().to(device, dtype=dtype)
     aes_model.requires_grad_(False)
-    if device == "cpu":
+    if device.type == "cpu":
         aes_model.forward = torch.compile(aes_model.forward, backend="openvino", options={"device": "GPU", "config" : {ov_hints.execution_mode : ov_hints.ExecutionMode.ACCURACY}})
     else:
         aes_model.forward = torch.compile(aes_model.forward, backend="inductor")
@@ -238,9 +238,9 @@ def main():
             steps_after_gc = steps_after_gc + 1
             if steps_after_gc == 0 or steps_after_gc >= 10000:
                 gc.collect()
-                if "cpu" not in device:
-                    getattr(torch, torch.device(device).type).synchronize()
-                    getattr(torch, torch.device(device).type).empty_cache()
+                if device.type != "cpu":
+                    getattr(torch, device.type).synchronize()
+                    getattr(torch, device.type).empty_cache()
                 steps_after_gc = 1 if steps_after_gc == 0 else 0
 
     atexit.unregister(exit_handler)
