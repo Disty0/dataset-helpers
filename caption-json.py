@@ -70,7 +70,7 @@ except Exception:
     sdnq_available = False
 
 max_image_size = 1048576 # 1024x1024
-max_new_tokens = 2048
+max_new_tokens = 1536
 max_input_tokens = 1280
 use_tunable_ops = False # Set to True for performance increase for AMD, uses quite a bit of VRAM when tuning
 use_torch_compile = False # torch.compile causes nonsense outputs
@@ -878,7 +878,6 @@ def main():
                 logits_processor=logits_processor,
                 past_key_values=past_key_values,
                 cache_implementation=cache_implementation,
-                #disable_compile=True,
             )
             generated_ids = [
                 output_ids[len(input_ids) :]
