@@ -171,7 +171,10 @@ if is_gemma:
         batch_size = int((free_memory * 2) / math.sqrt(model_param_size))
     else:
         batch_size = int((free_memory * 4) / math.sqrt(model_param_size))
-    batch_size -= batch_size % 2
+    if batch_size > 8:
+        batch_size -= batch_size % 8
+    else:
+        batch_size -= batch_size % 2
     batch_size = max(batch_size, 1)
 else:
     batch_size = 1
