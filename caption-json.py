@@ -70,7 +70,7 @@ except Exception:
     sdnq_available = False
 
 max_image_size = 1048576 # 1024x1024
-max_new_tokens = 1536
+max_new_tokens = 1024
 max_input_tokens = 1280
 use_tunable_ops = False # Set to True for performance increase for AMD, uses quite a bit of VRAM when tuning
 use_torch_compile = False # torch.compile causes nonsense outputs
