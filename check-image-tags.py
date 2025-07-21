@@ -107,9 +107,9 @@ for image_path in file_list:
         general_tags.extend(json_data.get("wd_tag_string_general", "").split(" "))
 
         if (
-            json_data["is_banned"] or json_data["is_flagged"] or json_data["is_deleted"]
+            json_data.get("is_banned", False) or json_data.get("is_flagged", False) or json_data.get("is_deleted", False)
             or any([bool(tag in general_tags) for tag in general_blacklist])
-            or any([bool(tag in json_data["tag_string_meta"]) for tag in meta_blacklist])
+            or any([bool(tag in json_data.get("tag_string_meta", "")) for tag in meta_blacklist])
         ):
             bad_image_count += 1
             if remove_files:
