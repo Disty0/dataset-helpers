@@ -329,7 +329,7 @@ def get_tags_from_json(json_path: str, image_path: str) -> str:
         if rating == "g":
             line += ", sfw rating"
         elif rating == "s":
-            line += ", suggestive rating"
+            line += ", sensitive rating"
         elif rating == "q":
             line += ", nsfw rating"
         elif rating == "e":
