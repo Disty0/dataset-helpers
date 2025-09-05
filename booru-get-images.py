@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 image_ext = ".jxl"
 pybooru.resources.SITE_LIST["shima"] = {"url": "https://shima.donmai.us/"}
-client = pybooru.Danbooru('shima')
+client = pybooru.Danbooru("shima")
 
 if image_ext == ".jxl":
     import pillow_jxl # noqa: F401
@@ -79,6 +79,7 @@ general_blacklist = (
 )
 
 meta_blacklist = (
+    "off-topic",
     "corrupted_file",
     "artifacts",
     "aliasing",
@@ -133,15 +134,18 @@ for id in tqdm(range(args.start, args.end)):
         general_tags.extend(image_data.get("wd_tag_string_general", "").split(" "))
         is_pixel_art = "pixel_art" in general_tags
 
-        if (image_data.get("file_url", None) is not None
-        and image_data["file_ext"] not in {"avif", "avi", "gif", "html", "mp3", "mp4", "mpg", "pdf", "rar", "swf", "webm", "wmv", "zip"}
-        and (image_data["file_size"] > 102400 or is_pixel_art)
-        and (image_size > 768000 or is_pixel_art)
-        and not image_data["is_banned"]
-        and not image_data["is_flagged"]
-        and not image_data["is_deleted"]
-        and not any([bool(tag in general_tags) for tag in general_blacklist])
-        and not any([bool(tag in image_data["tag_string_meta"]) for tag in meta_blacklist])):
+        if (
+            image_data.get("file_url", None) is not None
+            and image_data["score"] > 0
+            and not image_data["is_banned"]
+            and not image_data["is_flagged"]
+            and not image_data["is_deleted"]
+            and (image_size > 768000 or is_pixel_art)
+            and (image_data["file_size"] > 102400 or is_pixel_art)
+            and image_data["file_ext"] not in {"avif", "avi", "gif", "html", "mp3", "mp4", "mpg", "pdf", "rar", "swf", "webm", "wmv", "zip"}
+            and not any([bool(tag in general_tags) for tag in general_blacklist])
+            and not any([bool(tag in image_data["tag_string_meta"]) for tag in meta_blacklist])
+        ):
             try:
                 if image_ext == ".jxl" and image_data["file_ext"] in {"jpg", "jpeg"}:
                     jpg_path = os.path.join(folder, str(id)+".jpg")

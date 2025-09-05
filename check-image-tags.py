@@ -65,6 +65,7 @@ general_blacklist = (
 )
 
 meta_blacklist = (
+    "off-topic",
     "corrupted_file",
     "artifacts",
     "aliasing",
