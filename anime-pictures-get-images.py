@@ -186,17 +186,18 @@ for id in tqdm(range(args.start, args.end)):
                 error_file.close()
                 continue
 
-        width = int(image_data["image_width"])
-        height = int(image_data["image_height"])
-        image_size = width * height
-        general_tags = image_data["tag_string_general"].split(" ")
-        general_tags.extend(image_data.get("wd_tag_string_general", "").split(" "))
-        is_pixel_art = "pixel_art" in general_tags
+        if image_data.get("file_url", None) is not None and image_data.get("redirect", None) is None and image_data.get("redirect_id", None) is None:
+            width = int(image_data["image_width"])
+            height = int(image_data["image_height"])
+            image_size = width * height
+            general_tags = image_data["tag_string_general"].split(" ")
+            general_tags.extend(image_data.get("wd_tag_string_general", "").split(" "))
+            is_pixel_art = "pixel_art" in general_tags
+        else:
+            continue
 
         if (
-            image_data.get("file_url", None) is not None
-            and image_data.get("redirect_id", None) is None
-            and image_data["score"] > 0
+            image_data["score"] > 0
             and (image_size > 768000 or is_pixel_art)
             and (image_data["file_size"] > 102400 or is_pixel_art)
             and image_data["file_ext"] not in {"avif", "avi", "gif", "html", "mp3", "mp4", "mpg", "pdf", "rar", "swf", "webm", "wmv", "zip"}
@@ -229,7 +230,9 @@ for id in tqdm(range(args.start, args.end)):
                 image.close()
                 if jpg_path is not None and os.path.exists(jpg_path):
                     os.remove(jpg_path)
+                time.sleep(0.5)
             except Exception as e:
+                time.sleep(2)
                 if jpg_path is not None and os.path.exists(jpg_path):
                     os.remove(jpg_path)
                 str_e = str(e)

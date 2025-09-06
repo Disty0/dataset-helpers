@@ -127,16 +127,18 @@ for id in tqdm(range(args.start, args.end)):
                     error_file.close()
                 continue
 
-        width = int(image_data["image_width"])
-        height = int(image_data["image_height"])
-        image_size = width * height
-        general_tags = image_data["tag_string_general"].split(" ")
-        general_tags.extend(image_data.get("wd_tag_string_general", "").split(" "))
-        is_pixel_art = "pixel_art" in general_tags
+        if image_data.get("file_url", None) is not None:
+            width = int(image_data["image_width"])
+            height = int(image_data["image_height"])
+            image_size = width * height
+            general_tags = image_data["tag_string_general"].split(" ")
+            general_tags.extend(image_data.get("wd_tag_string_general", "").split(" "))
+            is_pixel_art = "pixel_art" in general_tags
+        else:
+            continue
 
         if (
-            image_data.get("file_url", None) is not None
-            and image_data["score"] > 0
+            image_data["score"] > 0
             and not image_data["is_banned"]
             and not image_data["is_flagged"]
             and not image_data["is_deleted"]
