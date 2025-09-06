@@ -27,6 +27,7 @@ def get_json_data(session, id):
     json_data["anime_pictures_file_url"] = raw_data.pop("file_url")
     json_data["anime_pictures_score"] = json_data.pop("score")
     json_data["score"] = json_data.pop("score_number")
+    json_data["created_at"] = json_data.pop("datetime")
     json_data["file_ext"] = json_data["anime_pictures_file_url"].rsplit(".", maxsplit=1)[-1]
     json_data["file_url"] = "https://oimages.anime-pictures.net/" + json_data["md5"][:3] + "/" + json_data["md5"] + "." + json_data["file_ext"]
     for key, value in raw_data.items():
