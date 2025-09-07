@@ -2,6 +2,8 @@
 from typing import Dict, List, Tuple, Union
 
 import os
+os.environ.setdefault("UR_L0_ENABLE_RELAXED_ALLOCATION_LIMITS", "1")
+
 import gc
 import copy
 import math
