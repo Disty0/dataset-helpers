@@ -31,7 +31,7 @@ use_tunable_ops = False
 use_torch_compile = True
 device = torch.device("xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
 caption_key = "aesthetic-shadow-v2"
-MODEL_REPO = "shadowlilac/aesthetic-shadow-v2"
+MODEL_REPO = "Disty0/aesthetic-shadow-v2"
 dtype = torch.float16 if device.type != "cpu" else torch.float32
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
