@@ -37,7 +37,7 @@ except Exception:
 
 
 from queue import Queue
-from transformers import AutoModelForCausalLM, AutoProcessor
+from transformers import Florence2ForConditionalGeneration, AutoProcessor
 from concurrent.futures import ThreadPoolExecutor
 from glob import glob
 from tqdm import tqdm
@@ -50,12 +50,13 @@ from PIL import Image # noqa: E402
 
 from typing import Dict, List, Tuple, Union
 
-batch_size = 8
+batch_size = 32
+max_new_tokens = 1024
+max_input_tokens = 1280
 use_tunable_ops = False
 use_torch_compile = False
 caption_key = "florence-2-base-promptgen-v1-5"
-model_id = "MiaoshouAI/Florence-2-base-PromptGen-v1.5"
-revision = "c06a5f02cc6071a5d65ee5d294cf3732d3097540"
+model_id = "Disty0/Florence-2-base-PromptGen-v1.5"
 device = torch.device("cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu")
 dtype = torch.float16 if device.type == "cuda" else torch.bfloat16 if device.type == "xpu" else torch.float32
 use_flash_atten = device.type == "cuda"
@@ -404,10 +405,7 @@ class ImageBackend():
                     image, prompt = self.load_from_file(batch)
                     images.append(image)
                     prompts.append(prompt)
-                inputs = self.processor(text=prompts, images=images, return_tensors="pt", padding="longest", max_length=769, truncation=True) # 769 = 577 image + 192 text. max_length > 769 is too slow.
-                attention_mask_image = torch.ones((inputs["attention_mask"].shape[0], 577), device=inputs["attention_mask"].device, dtype=inputs["attention_mask"].dtype)
-                inputs["attention_mask"] = torch.cat([attention_mask_image, inputs["attention_mask"]], dim=1) # add atten mask for the image
-                inputs["pixel_values"] = inputs["pixel_values"].to(dtype=dtype)
+                inputs = self.processor(text=prompts, images=images, return_tensors="pt", padding="longest", max_length=max_input_tokens, truncation=True)
                 self.load_queue.put((inputs, batches))
                 self.load_queue_lenght += 1
             else:
@@ -481,11 +479,8 @@ def main():
     if use_tunable_ops:
         torch.cuda.tunable.enable(val=True)
 
-    processor = AutoProcessor.from_pretrained(model_id, revision=revision, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id, revision=revision, trust_remote_code=True, torch_dtype=dtype,
-        attn_implementation="flash_attention_2" if use_flash_atten else None,
-    ).to(device, dtype=dtype).eval()
+    processor = AutoProcessor.from_pretrained(model_id)
+    model = Florence2ForConditionalGeneration.from_pretrained(model_id, torch_dtype=dtype, attn_implementation="flash_attention_2" if use_flash_atten else None).to(device, dtype=dtype).eval()
     model.requires_grad_(False)
     model.vision_tower.eval()
     model.vision_tower.requires_grad_(False)
@@ -560,11 +555,10 @@ def main():
         try:
             torch.compiler.cudagraph_mark_step_begin()
             inputs, image_paths = image_backend.get_images()
+            inputs = inputs.to(dtype=dtype).to(device)
             generated_ids = model.generate(
-                input_ids=inputs["input_ids"].to(device),
-                pixel_values=inputs["pixel_values"].to(device),
-                attention_mask=inputs["attention_mask"].to(device),
-                max_new_tokens=1024,
+                **inputs,
+                max_new_tokens=max_new_tokens,
                 do_sample=False,
                 use_cache=True,
                 num_beams=3,
