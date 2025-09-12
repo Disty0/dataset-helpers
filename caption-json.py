@@ -66,7 +66,7 @@ except Exception:
 from PIL import Image # noqa: E402
 
 try:
-    from sdnq import SDNQQuantizer, SDNQConfig
+    from sdnq import SDNQConfig
     sdnq_available = True
 except Exception:
     sdnq_available = False
