@@ -480,7 +480,7 @@ def main():
         torch.cuda.tunable.enable(val=True)
 
     processor = AutoProcessor.from_pretrained(model_id)
-    model = Florence2ForConditionalGeneration.from_pretrained(model_id, torch_dtype=dtype, attn_implementation="flash_attention_2" if use_flash_atten else None).to(device, dtype=dtype).eval()
+    model = Florence2ForConditionalGeneration.from_pretrained(model_id, dtype=dtype, attn_implementation="flash_attention_2" if use_flash_atten else None).to(device, dtype=dtype).eval()
     model.requires_grad_(False)
     model.vision_tower.eval()
     model.vision_tower.requires_grad_(False)

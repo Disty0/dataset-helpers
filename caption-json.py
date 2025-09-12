@@ -741,7 +741,7 @@ def main():
     else:
         logits_processor = None
     model = AutoModelForImageTextToText.from_pretrained(
-        model_id, torch_dtype=dtype, device_map=device if device.type != "xpu" else "cpu", # xpu hits the 4gb alloc limit
+        model_id, dtype=dtype, device_map=device if device.type != "xpu" else "cpu", # xpu hits the 4gb alloc limit
         attn_implementation="flash_attention_2" if use_flash_atten else None,
         quantization_config=quantization_config,
     ).eval()

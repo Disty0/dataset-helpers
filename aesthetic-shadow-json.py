@@ -127,7 +127,7 @@ def main():
     if use_tunable_ops:
         torch.cuda.tunable.enable(val=True)
 
-    model = ViTForImageClassification.from_pretrained(MODEL_REPO, torch_dtype=dtype)
+    model = ViTForImageClassification.from_pretrained(MODEL_REPO, dtype=dtype)
     processor = ViTImageProcessor.from_pretrained(MODEL_REPO, use_fast=True)
     model = model.to(device, dtype=dtype).eval()
     model.requires_grad_(False)
