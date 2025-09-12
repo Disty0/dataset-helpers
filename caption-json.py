@@ -728,9 +728,6 @@ def main():
     if quantize_weights is not None:
         modules_to_not_convert = ["correction_coefs", "prediction_coefs", "lm_head", "embedding_projection"]
         if sdnq_available:
-            import transformers
-            transformers.quantizers.auto.AUTO_QUANTIZER_MAPPING["sdnq"] = SDNQQuantizer
-            transformers.quantizers.auto.AUTO_QUANTIZATION_CONFIG_MAPPING["sdnq"] = SDNQConfig
             quantization_config = SDNQConfig(weights_dtype=quantize_weights, use_quantized_matmul=use_quantized_matmul, quantize_device=device, return_device=device, modules_to_not_convert=modules_to_not_convert)
         else:
             from transformers import QuantoConfig
