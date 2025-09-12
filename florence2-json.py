@@ -54,7 +54,7 @@ batch_size = 32
 max_new_tokens = 1024
 max_input_tokens = 1280
 use_tunable_ops = False
-use_torch_compile = False
+use_torch_compile = True
 caption_key = "florence-2-base-promptgen-v1-5"
 model_id = "Disty0/Florence-2-base-PromptGen-v1.5"
 device = torch.device("cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu")
@@ -489,10 +489,12 @@ def main():
 
     if ipex_available:
         model.vision_tower = ipex.llm.optimize(model.vision_tower, device=device, dtype=dtype, inplace=True)
+        model.multi_modal_projector = ipex.llm.optimize(model.multi_modal_projector, device=device, dtype=dtype, inplace=True)
         model.language_model = ipex.llm.optimize(model.language_model, device=device, dtype=dtype, inplace=True)
     elif use_torch_compile:
-        model.vision_tower.forward_features_unpool = torch.compile(model.vision_tower.forward_features_unpool, backend="inductor")
-        model.language_model.generate = torch.compile(model.language_model.generate, backend="inductor")
+        model.vision_tower = torch.compile(model.vision_tower, backend="inductor")
+        model.multi_modal_projector = torch.compile(model.multi_modal_projector, backend="inductor")
+        model.language_model = torch.compile(model.language_model, backend="inductor")
 
 
     print(f"Searching for {img_ext_list} files...")
