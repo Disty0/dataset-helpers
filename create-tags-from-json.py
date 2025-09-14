@@ -250,7 +250,7 @@ def dedupe_character_tags(split_tags: List[str], no_shuffle: bool) -> List[str]:
     return deduped_tags
 
 
-def get_tags_from_json(json_path: str, image_path: str, caption_key: str, no_shuffle: bool, no_non_general_tags: bool) -> str:
+def get_tags_from_json(json_path: str, image_path: str, caption_key: str, no_shuffle: bool, general_only: bool) -> str:
     with open(json_path, "r") as json_file:
         json_data = json.load(json_file)
 
@@ -285,7 +285,7 @@ def get_tags_from_json(json_path: str, image_path: str, caption_key: str, no_shu
                 elif pixiv_tag.isascii():
                     split_general_tags.append(pixiv_tag)
 
-    if no_non_general_tags:
+    if general_only:
         line = ""
     else:
         line = get_aesthetic_tag(json_data)
@@ -297,11 +297,11 @@ def get_tags_from_json(json_path: str, image_path: str, caption_key: str, no_shu
     for style_age_tag in style_age_tags:
         if style_age_tag in split_general_tags:
             split_general_tags.pop(split_general_tags.index(style_age_tag))
-            if not no_non_general_tags:
+            if not general_only:
                 if not style_age_tag_added and int(style_age_tag[:3]) < int(json_data['created_at'][:3]):
                     line += f", {style_age_tag[:4]}s (style)"
                     style_age_tag_added = True
-    if not no_non_general_tags and (
+    if not general_only and (
         not style_age_tag_added and json_data.get("style_age", "") and (
             int(json_data['style_age'][:3]) < int(json_data['created_at'][:3])
             or ((2015 <= int(json_data['created_at'][:4]) < 2020) and int(json_data['style_age'][:4]) < 2015)
@@ -314,7 +314,7 @@ def get_tags_from_json(json_path: str, image_path: str, caption_key: str, no_shu
             if special_tag:
                 line += f", {special_tag.replace('_', ' ')}"
 
-    if not no_non_general_tags:
+    if not general_only:
         for artist in split_artist_tags:
             if artist:
                 line += f", art by {artist.replace('_', ' ')}"
@@ -363,12 +363,12 @@ def get_tags_from_json(json_path: str, image_path: str, caption_key: str, no_shu
         if tag:
             line += f", {tag.replace('_', ' ') if len(tag) > 3 else tag}"
 
-    if not no_non_general_tags and split_meta_tags:
+    if not general_only and split_meta_tags:
         for meta_tag in split_meta_tags:
             if meta_tag and not any([bool(meta_tag_blacklist in meta_tag) for meta_tag_blacklist in meta_blacklist]):
                 line += f", {meta_tag.replace('_', ' ')}"
 
-    if no_non_general_tags:
+    if general_only:
         line = line[2:]
     return line
 
@@ -404,7 +404,7 @@ class SaveTagBackend():
         caption_file.close()
 
 
-def main(out_path: str, caption_key: str, no_shuffle: bool, no_non_general_tags: bool):
+def main(out_path: str, caption_key: str, no_shuffle: bool, general_only: bool):
     steps_after_gc = 0
     print(f"Searching for {img_ext_list} files...")
     file_list = []
@@ -425,7 +425,7 @@ def main(out_path: str, caption_key: str, no_shuffle: bool, no_non_general_tags:
     for image_path in tqdm(file_list):
         json_path = os.path.splitext(image_path)[0]+".json"
         try:
-            tags = get_tags_from_json(json_path, image_path, caption_key, no_shuffle, no_non_general_tags)
+            tags = get_tags_from_json(json_path, image_path, caption_key, no_shuffle, general_only)
             save_backend.save(tags, os.path.splitext(json_path)[0]+".txt")
         except Exception as e:
             os.makedirs("errors", exist_ok=True)
@@ -446,6 +446,6 @@ if __name__ == '__main__':
     parser.add_argument('--out_path', default="", type=str)
     parser.add_argument('--caption_key', default="wd", type=str)
     parser.add_argument('--no_shuffle', default=False, action='store_true')
-    parser.add_argument('--no_non_general_tags', default=False, action='store_true')
+    parser.add_argument('--general_only', default=False, action='store_true')
     args = parser.parse_args()
-    main(args.out_path, args.caption_key, args.no_shuffle, args.no_non_general_tags)
+    main(args.out_path, args.caption_key, args.no_shuffle, args.general_only)
