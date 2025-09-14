@@ -6,6 +6,7 @@ import time
 import json
 import atexit
 import random
+import argparse
 from queue import Queue
 from glob import glob
 from tqdm import tqdm
@@ -14,13 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List
 
 
-out_path = ""
-caption_key = "wd"
-#caption_key = "pixai"
-do_shuffle = True
-no_non_general_tags = False
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
-
 tag_dict_path = os.path.join(os.path.dirname(__file__), "tag_dict.json")
 tag_categories_path = os.path.join(os.path.dirname(__file__), "tag_categories.json")
 
@@ -201,7 +196,7 @@ def get_aesthetic_tag(json_data: Dict[str, int]) -> str:
     return aes_score_to_tag[aes_score]
 
 
-def get_quality_tag(json_data: Dict[str, int]) -> str:
+def get_quality_tag(json_data: Dict[str, int], caption_key: str) -> str:
     if json_data.get("fav_count", None) is not None or json_data.get("score", None) is not None:
         quality_score = get_aes_score(
             json_data.get("fav_count", json_data["score"]),
@@ -215,7 +210,7 @@ def get_quality_tag(json_data: Dict[str, int]) -> str:
     return quality_score_to_tag[quality_score]
 
 
-def dedupe_tags(split_tags: List[str]) -> List[str]:
+def dedupe_tags(split_tags: List[str], no_shuffle: bool) -> List[str]:
     if len(split_tags) <= 1:
         return split_tags
     split_tags.sort(key=len, reverse=True)
@@ -226,12 +221,12 @@ def dedupe_tags(split_tags: List[str]) -> List[str]:
         if tag and spaced_tag not in ordered_tag_string and tag not in deduped_tags:
             ordered_tag_string += spaced_tag
             deduped_tags.append(tag)
-    if do_shuffle:
+    if no_shuffle:
         random.shuffle(deduped_tags)
     return deduped_tags
 
 
-def dedupe_character_tags(split_tags: List[str]) -> List[str]:
+def dedupe_character_tags(split_tags: List[str], no_shuffle: bool) -> List[str]:
     if len(split_tags) <= 1:
         return split_tags
     split_tags.sort(key=len, reverse=True)
@@ -250,12 +245,12 @@ def dedupe_character_tags(split_tags: List[str]) -> List[str]:
         pruned_tag in ordered_tag_string and pruned_tag_end in ordered_tag_string):
             ordered_tag_string += spaced_tag
             deduped_tags.append(tag)
-    if do_shuffle:
+    if no_shuffle:
         random.shuffle(deduped_tags)
     return deduped_tags
 
 
-def get_tags_from_json(json_path: str, image_path: str) -> str:
+def get_tags_from_json(json_path: str, image_path: str, caption_key: str, no_shuffle: bool, no_non_general_tags: bool) -> str:
     with open(json_path, "r") as json_file:
         json_data = json.load(json_file)
 
@@ -294,7 +289,7 @@ def get_tags_from_json(json_path: str, image_path: str) -> str:
         line = ""
     else:
         line = get_aesthetic_tag(json_data)
-        line += f", {get_quality_tag(json_data)}"
+        line += f", {get_quality_tag(json_data, caption_key)}"
         year_tag = str(json_data['created_at'][:4])
         line += f", year {year_tag}"
 
@@ -324,7 +319,7 @@ def get_tags_from_json(json_path: str, image_path: str) -> str:
             if artist:
                 line += f", art by {artist.replace('_', ' ')}"
 
-        if do_shuffle:
+        if no_shuffle:
             random.shuffle(split_meta_tags)
         for medium_tag in split_raw_meta_tags:
             if medium_tag.endswith("_(medium)") and medium_tag != "photoshop_(medium)":
@@ -346,13 +341,13 @@ def get_tags_from_json(json_path: str, image_path: str) -> str:
             split_general_tags.pop(split_general_tags.index(no_shuffle_tag))
             line += f", {no_shuffle_tag.replace('_', ' ')}"
 
-    for char in dedupe_character_tags(split_character_tags):
+    for char in dedupe_character_tags(split_character_tags, no_shuffle):
         if char:
             line += f", character {char.replace('_', ' ')}"
 
     if "original" in split_copyright_tags:
         split_copyright_tags.pop(split_copyright_tags.index("original"))
-    for cpr in dedupe_tags(split_copyright_tags):
+    for cpr in dedupe_tags(split_copyright_tags, no_shuffle):
         if cpr:
             line += f", from {cpr.replace('_', ' ')}"
 
@@ -364,7 +359,7 @@ def get_tags_from_json(json_path: str, image_path: str) -> str:
     if json_data.get("file_ext", "jpg") not in {"png", "jxl"} and (json_data.get("file_size", float("inf")) < 307200 or os.path.getsize(image_path) < 307200):
         split_general_tags.append("compression_artifacts")
 
-    for tag in dedupe_tags(split_general_tags):
+    for tag in dedupe_tags(split_general_tags, no_shuffle):
         if tag:
             line += f", {tag.replace('_', ' ') if len(tag) > 3 else tag}"
 
@@ -379,7 +374,8 @@ def get_tags_from_json(json_path: str, image_path: str) -> str:
 
 
 class SaveTagBackend():
-    def __init__(self, max_save_workers=8):
+    def __init__(self, out_path: str, max_save_workers=8):
+        self.out_path = out_path
         self.keep_saving = True
         self.save_queue = Queue()
         self.save_thread = ThreadPoolExecutor(max_workers=max_save_workers)
@@ -399,23 +395,23 @@ class SaveTagBackend():
         print("Stopping the save backend threads")
 
     def save_to_file(self, data: str, path: str) -> None:
-        if out_path:
-            os.makedirs(os.path.join(out_path, os.path.dirname(path)), exist_ok=True)
-            caption_file = open(os.path.join(out_path, path), "w")
+        if self.out_path:
+            os.makedirs(os.path.join(self.out_path, os.path.dirname(path)), exist_ok=True)
+            caption_file = open(os.path.join(self.out_path, path), "w")
         else:
             caption_file = open(path, "w")
         caption_file.write(data)
         caption_file.close()
 
 
-def main():
+def main(out_path: str, caption_key: str, no_shuffle: bool, no_non_general_tags: bool):
     steps_after_gc = 0
     print(f"Searching for {img_ext_list} files...")
     file_list = []
     for ext in img_ext_list:
         file_list.extend(glob(f"**/*.{ext}"))
 
-    save_backend = SaveTagBackend(max_save_workers=4)
+    save_backend = SaveTagBackend(out_path, max_save_workers=4)
 
     def exit_handler(save_backend):
         while not save_backend.save_queue.empty():
@@ -429,7 +425,7 @@ def main():
     for image_path in tqdm(file_list):
         json_path = os.path.splitext(image_path)[0]+".json"
         try:
-            tags = get_tags_from_json(json_path, image_path)
+            tags = get_tags_from_json(json_path, image_path, caption_key, no_shuffle, no_non_general_tags)
             save_backend.save(tags, os.path.splitext(json_path)[0]+".txt")
         except Exception as e:
             os.makedirs("errors", exist_ok=True)
@@ -445,4 +441,11 @@ def main():
     exit_handler(save_backend)
 
 if __name__ == '__main__':
-    main()
+    #caption_keys: wd, pixiv
+    parser = argparse.ArgumentParser(description='Create tags from json')
+    parser.add_argument('--out_path', default="", type=str)
+    parser.add_argument('--caption_key', default="wd", type=str)
+    parser.add_argument('--no_shuffle', default=False, action='store_true')
+    parser.add_argument('--no_non_general_tags', default=False, action='store_true')
+    args = parser.parse_args()
+    main(args.out_path, args.caption_key, args.no_shuffle, args.no_non_general_tags)

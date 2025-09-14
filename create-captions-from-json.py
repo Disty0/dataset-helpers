@@ -5,6 +5,7 @@ import gc
 import time
 import json
 import atexit
+import argparse
 from queue import Queue
 from glob import glob
 from tqdm import tqdm
@@ -12,13 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from typing import Tuple
 
-out_path = ""
-caption_key = "gemma-3n-e4b-it"
-#caption_key = "qwen2.5-vl-7b-instruct"
-#caption_key = "florence-2-base-promptgen-v1-5"
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
-
-is_gemma = "gemma" in caption_key
 
 cleanup_start_list = (
     ["This is", ""],
@@ -209,7 +204,7 @@ def cleanup_whitespace(caption: str) -> str:
     return caption
 
 
-def cleanup_caption(caption: str, json_data: dict = None) -> str:
+def cleanup_caption(caption: str, is_gemma: bool, json_data: dict = None) -> str:
     caption = cleanup_repeats_recursive(caption)
     caption = cleanup_whitespace(caption)
     for old_tag, new_tag in cleanup_caption_list:
@@ -289,14 +284,15 @@ def cleanup_caption(caption: str, json_data: dict = None) -> str:
     return caption
 
 
-def get_captions_from_json(json_path: str) -> str:
+def get_captions_from_json(json_path: str, caption_key: str, is_gemma: bool) -> str:
     with open(json_path, "r") as json_file:
         json_data = json.load(json_file)
-    return cleanup_caption(json_data[caption_key], json_data=json_data)
+    return cleanup_caption(json_data[caption_key], is_gemma, json_data=json_data)
 
 
 class SaveTagBackend():
-    def __init__(self, max_save_workers: int = 8):
+    def __init__(self, out_path: str, max_save_workers: int = 8):
+        self.out_path = out_path
         self.keep_saving = True
         self.save_queue = Queue()
         self.save_thread = ThreadPoolExecutor(max_workers=max_save_workers)
@@ -317,17 +313,19 @@ class SaveTagBackend():
 
     def save_to_file(self, data: str, path: str) -> None:
         if data:
-            if out_path:
-                os.makedirs(os.path.join(out_path, os.path.dirname(path)), exist_ok=True)
-                caption_file = open(os.path.join(out_path, path), "w")
+            if self.out_path:
+                os.makedirs(os.path.join(self.out_path, os.path.dirname(path)), exist_ok=True)
+                caption_file = open(os.path.join(self.out_path, path), "w")
             else:
                 caption_file = open(path, "w")
             caption_file.write(data)
             caption_file.close()
 
 
-def main():
+def main(out_path: str, caption_key: str):
     steps_after_gc = 0
+    is_gemma = "gemma" in caption_key
+
     print(f"Searching for {img_ext_list} files...")
     file_list = []
     for ext in img_ext_list:
@@ -347,7 +345,7 @@ def main():
     for image_path in tqdm(file_list):
         json_path = os.path.splitext(image_path)[0]+".json"
         try:
-            captions = get_captions_from_json(json_path)
+            captions = get_captions_from_json(json_path, caption_key, is_gemma)
             save_backend.save(captions, os.path.splitext(json_path)[0]+".txt")
         except Exception as e:
             os.makedirs("errors", exist_ok=True)
@@ -363,4 +361,9 @@ def main():
     exit_handler(save_backend)
 
 if __name__ == '__main__':
-    main()
+    #caption_keys: gemma-3n-e4b-it, qwen2.5-vl-7b-instruct, florence-2-base-promptgen-v1-5
+    parser = argparse.ArgumentParser(description='Create tags from json')
+    parser.add_argument('--out_path', default="", type=str)
+    parser.add_argument('--caption_key', default="gemma-3n-e4b-it", type=str)
+    args = parser.parse_args()
+    main(args.out_path, args.caption_key)
