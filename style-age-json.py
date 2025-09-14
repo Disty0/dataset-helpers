@@ -23,8 +23,8 @@ from typing import List, Tuple
 
 batch_size = 32
 model_repo = "deepghs/anime_style_ages"
-MODEL_FILENAME = "mobilenetv3_v0_dist/model.onnx"
-LABEL_FILENAME = "mobilenetv3_v0_dist/meta.json"
+model_filename = "mobilenetv3_v0_dist/model.onnx"
+label_filename = "mobilenetv3_v0_dist/meta.json"
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
@@ -120,11 +120,11 @@ def main():
     steps_after_gc = -1
     model_config_path = huggingface_hub.hf_hub_download(
         model_repo,
-        LABEL_FILENAME,
+        label_filename,
     )
     model_path = huggingface_hub.hf_hub_download(
         model_repo,
-        MODEL_FILENAME,
+        model_filename,
     )
 
     with open(model_config_path, "r") as model_config_file:

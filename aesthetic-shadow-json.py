@@ -31,7 +31,7 @@ use_tunable_ops = False
 use_torch_compile = True
 device = torch.device("xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
 caption_key = "aesthetic-shadow-v2"
-MODEL_REPO = "Disty0/aesthetic-shadow-v2"
+model_repo = "Disty0/aesthetic-shadow-v2"
 dtype = torch.float16 if device.type != "cpu" else torch.float32
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
@@ -127,8 +127,8 @@ def main():
     if use_tunable_ops:
         torch.cuda.tunable.enable(val=True)
 
-    model = ViTForImageClassification.from_pretrained(MODEL_REPO, dtype=dtype)
-    processor = ViTImageProcessor.from_pretrained(MODEL_REPO, use_fast=True)
+    model = ViTForImageClassification.from_pretrained(model_repo, dtype=dtype)
+    processor = ViTImageProcessor.from_pretrained(model_repo, use_fast=True)
     model = model.to(device, dtype=dtype).eval()
     model.requires_grad_(False)
 

@@ -33,9 +33,9 @@ use_tunable_ops = False
 use_torch_compile = True
 device = torch.device("xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
 caption_key = "waifu-scorer-v3"
-MODEL_REPO = "Eugeoter/waifu-scorer-v3"
-MODEL_FILENAME = "model.pth"
-CLIP_REPO = "openai/clip-vit-large-patch14"
+model_repo = "Eugeoter/waifu-scorer-v3"
+model_filename = "model.pth"
+clip_repo = "openai/clip-vit-large-patch14"
 dtype = torch.float16 if device.type != "cpu" else torch.float32
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
@@ -164,8 +164,8 @@ def main():
     if use_tunable_ops:
         torch.cuda.tunable.enable(val=True)
 
-    clipprocessor = CLIPProcessor.from_pretrained(CLIP_REPO, use_fast=True)
-    clipmodel = CLIPModel.from_pretrained(CLIP_REPO).eval().to(device, dtype=dtype)
+    clipprocessor = CLIPProcessor.from_pretrained(clip_repo, use_fast=True)
+    clipmodel = CLIPModel.from_pretrained(clip_repo).eval().to(device, dtype=dtype)
     clipmodel.requires_grad_(False)
     if device.type == "cpu":
         import openvino.properties.hint as ov_hints
@@ -176,9 +176,9 @@ def main():
     aes_model = MLP(input_size=768).to("cpu")
     aes_model.load_state_dict(torch.load(
         huggingface_hub.hf_hub_download(
-            repo_id=MODEL_REPO,
+            repo_id=model_repo,
             repo_type='model',
-            filename=MODEL_FILENAME
+            filename=model_filename
         ),
         map_location="cpu"))
     aes_model = aes_model.eval().to(device, dtype=dtype)

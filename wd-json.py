@@ -25,14 +25,15 @@ from typing import List, Tuple
 batch_size = 24
 general_thresh = 0.35
 character_thresh = 0.5
+
 model_repo = "SmilingWolf/wd-swinv2-tagger-v3"
-caption_key = "wd"
 #model_repo = "deepghs/pixai-tagger-v0.9-onnx"
-#caption_key = "pixai"
+
 MODEL_FILENAME = "model.onnx"
 LABEL_FILENAME = "selected_tags.csv"
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
+caption_key = model_repo.split("/", maxsplit=1)[-1].split("-", maxsplit=1)[0].replace(".", "-").lower()
 
 
 rating_map = {

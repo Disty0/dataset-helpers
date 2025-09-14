@@ -55,8 +55,9 @@ max_new_tokens = 1024
 max_input_tokens = 1280
 use_tunable_ops = False
 use_torch_compile = False
-caption_key = "florence-2-base-promptgen-v1-5"
-model_id = "Disty0/Florence-2-base-PromptGen-v1.5"
+model_repo = "Disty0/Florence-2-base-PromptGen-v1.5"
+
+caption_key = model_repo.lower().split("/", maxsplit=1)[-1].replace(".", "-")
 device = torch.device("cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu")
 dtype = torch.float16 if device.type == "cuda" else torch.bfloat16 if device.type == "xpu" else torch.float32
 use_flash_atten = device.type == "cuda"
@@ -479,8 +480,8 @@ def main():
     if use_tunable_ops:
         torch.cuda.tunable.enable(val=True)
 
-    processor = AutoProcessor.from_pretrained(model_id, use_fast=True)
-    model = Florence2ForConditionalGeneration.from_pretrained(model_id, dtype=dtype, attn_implementation="flash_attention_2" if use_flash_atten else None).to(device, dtype=dtype).eval()
+    processor = AutoProcessor.from_pretrained(model_repo, use_fast=True)
+    model = Florence2ForConditionalGeneration.from_pretrained(model_repo, dtype=dtype, attn_implementation="flash_attention_2" if use_flash_atten else None).to(device, dtype=dtype).eval()
     model.requires_grad_(False)
     model.vision_tower.eval()
     model.vision_tower.requires_grad_(False)

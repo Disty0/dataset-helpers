@@ -23,11 +23,11 @@ from PIL import Image # noqa: E402
 from typing import List, Tuple
 
 batch_size = 32
-MODEL_REPO = "deepghs/anime_aesthetic"
-MODEL_NAME = "swinv2pv3_v0_448_ls0.2_x"
-MODEL_FILENAME = "model.onnx"
-LABEL_FILENAME = "meta.json"
-SAMPLES_FILENAME = "samples.csv"
+model_repo = "deepghs/anime_aesthetic"
+model_name = "swinv2pv3_v0_448_ls0.2_x"
+model_filename = "model.onnx"
+label_filename = "meta.json"
+samples_filename = "samples.csv"
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
@@ -109,8 +109,8 @@ class SaveTagBackend():
     def save_to_file(self, data: Tuple[str, float], path: str) -> None:
         with open(path, "r") as json_file:
             json_data = json.load(json_file)
-        json_data[MODEL_NAME] = data[0]
-        json_data[MODEL_NAME+"_percentile"] = data[1]
+        json_data[model_name] = data[0]
+        json_data[model_name+"_percentile"] = data[1]
         with open(path, "w") as f:
             json.dump(json_data, f)
 
@@ -131,23 +131,23 @@ class SaveTagBackend():
 def main():
     steps_after_gc = -1
     model_config_path = huggingface_hub.hf_hub_download(
-        repo_id=MODEL_REPO,
+        repo_id=model_repo,
         repo_type='model',
-        filename=MODEL_NAME + "/" + LABEL_FILENAME,
+        filename=model_name + "/" + label_filename,
     )
     model_path = huggingface_hub.hf_hub_download(
-        repo_id=MODEL_REPO,
+        repo_id=model_repo,
         repo_type='model',
-        filename=MODEL_NAME + "/" + MODEL_FILENAME,
+        filename=model_name + "/" + model_filename,
     )
 
     with open(model_config_path, "r") as model_config_file:
         model_config = json.load(model_config_file)
 
     df = pd.read_csv(huggingface_hub.hf_hub_download(
-        repo_id=MODEL_REPO,
+        repo_id=model_repo,
         repo_type='model',
-        filename=MODEL_NAME + "/" + SAMPLES_FILENAME,
+        filename=model_name + "/" + samples_filename,
     ))
     df = df.sort_values(['score'])
     df['cnt'] = list(range(len(df)))
@@ -185,7 +185,7 @@ def main():
             json_path = os.path.splitext(image_path)[0]+".json"
             with open(json_path, "r") as json_file:
                 json_data = json.load(json_file)
-            if json_data.get(MODEL_NAME, None) is None:
+            if json_data.get(model_name, None) is None:
                 image_paths.append(image_path)
         except Exception as e:
             print(f"ERROR: {json_path} MESSAGE: {e}")

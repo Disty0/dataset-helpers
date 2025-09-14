@@ -32,9 +32,9 @@ use_tunable_ops = False
 use_torch_compile = True
 device = torch.device("xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
 caption_key = "wd-aes-b32-v0"
-MODEL_REPO = "hakurei/waifu-diffusion-v1-4"
-MODEL_FILENAME = "models/aes-B32-v0.pth"
-CLIP_REPO = "openai/clip-vit-base-patch32"
+model_repo = "hakurei/waifu-diffusion-v1-4"
+model_filename = "models/aes-B32-v0.pth"
+clip_repo = "openai/clip-vit-base-patch32"
 dtype = torch.float16 if device.type != "cpu" else torch.float32
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
@@ -150,8 +150,8 @@ def main():
     if use_tunable_ops:
         torch.cuda.tunable.enable(val=True)
 
-    clipprocessor = CLIPProcessor.from_pretrained(CLIP_REPO, use_fast=True)
-    clipmodel = CLIPModel.from_pretrained(CLIP_REPO).eval().to(device, dtype=dtype)
+    clipprocessor = CLIPProcessor.from_pretrained(clip_repo, use_fast=True)
+    clipmodel = CLIPModel.from_pretrained(clip_repo).eval().to(device, dtype=dtype)
     clipmodel.requires_grad_(False)
 
     if device.type == "cpu":
@@ -163,9 +163,9 @@ def main():
     aes_model = Classifier(512, 256, 1).to("cpu")
     aes_model.load_state_dict(torch.load(
         huggingface_hub.hf_hub_download(
-            repo_id=MODEL_REPO,
+            repo_id=model_repo,
             repo_type='model',
-            filename=MODEL_FILENAME
+            filename=model_filename
         ),
         map_location="cpu"))
     aes_model = aes_model.eval().to(device, dtype=dtype)
