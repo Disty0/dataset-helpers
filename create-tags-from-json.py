@@ -15,6 +15,9 @@ from typing import Dict, List
 
 
 out_path = ""
+caption_key = "wd"
+#caption_key = "pixai"
+do_shuffle = True
 no_non_general_tags = False
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 
@@ -202,7 +205,7 @@ def get_quality_tag(json_data: Dict[str, int]) -> str:
     if json_data.get("fav_count", None) is not None or json_data.get("score", None) is not None:
         quality_score = get_aes_score(
             json_data.get("fav_count", json_data["score"]),
-            danbooru_quality_scores[json_data.get("wd_rating", json_data["rating"])]
+            danbooru_quality_scores[json_data.get(f"{caption_key}_rating", json_data["rating"])]
         )
         if int(json_data["id"]) > 7000000:
             wd_quality_score = get_aes_score(json_data.get("swinv2pv3_v0_448_ls0.2_x_percentile", 0), aes_deepghs_scores)
@@ -223,7 +226,8 @@ def dedupe_tags(split_tags: List[str]) -> List[str]:
         if tag and spaced_tag not in ordered_tag_string and tag not in deduped_tags:
             ordered_tag_string += spaced_tag
             deduped_tags.append(tag)
-    random.shuffle(deduped_tags)
+    if do_shuffle:
+        random.shuffle(deduped_tags)
     return deduped_tags
 
 
@@ -246,7 +250,8 @@ def dedupe_character_tags(split_tags: List[str]) -> List[str]:
         pruned_tag in ordered_tag_string and pruned_tag_end in ordered_tag_string):
             ordered_tag_string += spaced_tag
             deduped_tags.append(tag)
-    random.shuffle(deduped_tags)
+    if do_shuffle:
+        random.shuffle(deduped_tags)
     return deduped_tags
 
 
@@ -319,13 +324,14 @@ def get_tags_from_json(json_path: str, image_path: str) -> str:
             if artist:
                 line += f", art by {artist.replace('_', ' ')}"
 
-        random.shuffle(split_meta_tags)
+        if do_shuffle:
+            random.shuffle(split_meta_tags)
         for medium_tag in split_raw_meta_tags:
             if medium_tag.endswith("_(medium)") and medium_tag != "photoshop_(medium)":
                 split_meta_tags.pop(split_meta_tags.index(medium_tag))
                 line += f", {medium_tag.replace('_', ' ')}"
 
-        rating = json_data.get("wd_rating", json_data["rating"])
+        rating = json_data.get(f"{caption_key}_rating", json_data["rating"])
         if rating == "g":
             line += ", sfw rating"
         elif rating == "s":
@@ -350,8 +356,8 @@ def get_tags_from_json(json_path: str, image_path: str) -> str:
         if cpr:
             line += f", from {cpr.replace('_', ' ')}"
 
-    if json_data.get("wd_tag_string_general", ""):
-        for wd_tag in json_data["wd_tag_string_general"].split(" "):
+    if json_data.get(f"{caption_key}_tag_string_general", ""):
+        for wd_tag in json_data[f"{caption_key}_tag_string_general"].split(" "):
             if wd_tag and wd_tag not in no_shuffle_tags and wd_tag not in style_age_tags and wd_tag not in split_general_tags:
                 split_general_tags.append(wd_tag)
 

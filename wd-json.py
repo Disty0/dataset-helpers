@@ -26,6 +26,9 @@ batch_size = 24
 general_thresh = 0.35
 character_thresh = 0.5
 model_repo = "SmilingWolf/wd-swinv2-tagger-v3"
+caption_key = "wd"
+#model_repo = "deepghs/pixai-tagger-v0.9-onnx"
+#caption_key = "pixai"
 MODEL_FILENAME = "model.onnx"
 LABEL_FILENAME = "selected_tags.csv"
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
@@ -41,11 +44,12 @@ rating_map = {
 
 
 class ImageBackend():
-    def __init__(self, batches: List[List[str]], model_target_size: int, load_queue_lenght: int = 256, max_load_workers: int = 4):
+    def __init__(self, batches: List[List[str]], model_target_size: int, channels_first: bool, load_queue_lenght: int = 256, max_load_workers: int = 4):
         self.load_queue_lenght = 0
         self.keep_loading = True
         self.batches = Queue()
         self.model_target_size = model_target_size
+        self.channels_first = channels_first
         for batch in batches:
             if isinstance(batch, str):
                 batch = [batch]
@@ -100,8 +104,11 @@ class ImageBackend():
 
         # Convert to numpy array
         image_array = np.asarray(padded_image, dtype=np.float32)
-        # Convert PIL-native RGB to BGR
-        image_array = image_array[:, :, ::-1]
+        if self.channels_first:
+            image_array = image_array.transpose(2,0,1) / 255
+        else:
+            # Convert PIL-native RGB to BGR
+            image_array = image_array[:, :, ::-1]
 
         return image_array
 
@@ -156,9 +163,10 @@ class SaveTagBackend():
             json_data["file_ext"] = file_ext
             json_data["file_size"] = os.path.getsize(image_path)
 
-        json_data["wd_rating"] = rating
-        json_data["wd_tag_string_character"] = character_strings
-        json_data["wd_tag_string_general"] = sorted_general_strings
+        if rating is not None:
+            json_data[f"{caption_key}_rating"] = rating
+        json_data[f"{caption_key}_tag_string_character"] = character_strings
+        json_data[f"{caption_key}_tag_string_general"] = sorted_general_strings
         #json_data["special_tags"] = "visual_novel_cg"
 
         with open(json_path, "w") as f:
@@ -167,40 +175,30 @@ class SaveTagBackend():
     def get_tags(self, predictions: np.ndarray) -> Tuple[str, str, str]:
         labels = list(zip(self.tag_names, predictions.astype(float)))
 
-        # First 4 labels are actually ratings: pick one with argmax
-        ratings_names = [labels[i] for i in self.rating_indexes]
-        rating = dict(ratings_names)
-        rating = max(rating, key=rating.get)
-        rating = rating_map[rating]
-
-        # Then we have general tags: pick any where prediction confidence > threshold
-        general_names = [labels[i] for i in self.general_indexes]
-
-        general_res = [x for x in general_names if x[1] > general_thresh]
-        general_res = dict(general_res)
+        if len(self.rating_indexes) > 0:
+            # First 4 labels are actually ratings: pick one with argmax
+            ratings_names = [labels[i] for i in self.rating_indexes]
+            rating = dict(ratings_names)
+            rating = max(rating, key=rating.get)
+            rating = rating_map[rating]
+        else:
+            rating = None
 
         # Everything else is characters: pick any where prediction confidence > threshold
         character_names = [labels[i] for i in self.character_indexes]
+        character_res = dict([x for x in character_names if x[1] > character_thresh and isinstance(x[0], str)])
+        character_strings = sorted(character_res.items(), key=lambda x: x[1], reverse=True)
+        character_strings = [x[0] for x in character_strings]
+        character_strings = " ".join(character_strings)
 
-        character_res = [x for x in character_names if x[1] > character_thresh]
-        character_res = dict(character_res)
-        character_strings = ""
-        if character_res:
-            for character in character_res.keys():
-                if character:
-                    character_strings += character + " "
-        if character_strings:
-            character_strings = character_strings[:-1]
+        # Then we have general tags: pick any where prediction confidence > threshold
+        general_names = [labels[i] for i in self.general_indexes]
+        general_res = dict([x for x in general_names if x[1] > general_thresh and isinstance(x[0], str)])
+        general_strings = sorted(general_res.items(), key=lambda x: x[1], reverse=True)
+        general_strings = [x[0] for x in general_strings]
+        general_strings = " ".join(general_strings)
 
-        sorted_general_strings = sorted(
-            general_res.items(),
-            key=lambda x: x[1],
-            reverse=True,
-        )
-        sorted_general_strings = [x[0] for x in sorted_general_strings]
-        sorted_general_strings = " ".join(sorted_general_strings)
-
-        return (rating, character_strings, sorted_general_strings)
+        return (rating, character_strings, general_strings)
 
 
 def main():
@@ -238,11 +236,20 @@ def main():
                 ["CPUExecutionProvider"]
             ),
         )
-    _, height, _, _ = model.get_inputs()[0].shape
-    model_target_size = height
 
-    input_name = model.get_inputs()[0].name
-    label_name = model.get_outputs()[0].name
+    # wd_in: 'batch_size', 448, 448, 3
+    # wd_out: output
+    # pixai_in: 'batch_size', 3, 448, 448
+    # pixai_out embedding, logits, prediction
+
+    input_shapes = model.get_inputs()[-1]
+    output_shapes = model.get_outputs()[-1]
+
+    model_target_size = input_shapes.shape[2]
+    channels_first = bool(input_shapes.shape[1] == 3)
+
+    input_name = input_shapes.name
+    label_name = output_shapes.name
 
 
     print(f"Searching for {img_ext_list} files...")
@@ -257,7 +264,7 @@ def main():
             if os.path.exists(json_path):
                 with open(json_path, "r") as json_file:
                     json_data = json.load(json_file)
-                if not json_data.get("wd_tag_string_general", ""):
+                if not json_data.get(f"{caption_key}_tag_string_general", ""):
                     image_paths.append(image_path)
             else:
                 image_paths.append(image_path)
@@ -275,7 +282,7 @@ def main():
         batches.append(current_batch)
 
     epoch_len = len(batches)
-    image_backend = ImageBackend(batches, model_target_size)
+    image_backend = ImageBackend(batches, model_target_size, channels_first)
     save_backend = SaveTagBackend(tag_names, rating_indexes, character_indexes, general_indexes)
 
     def exit_handler(image_backend, save_backend):
@@ -294,7 +301,7 @@ def main():
     for _ in tqdm(range(epoch_len)):
         try:
             images, image_paths = image_backend.get_images()
-            predictions = model.run([label_name], {input_name: images})[0]
+            predictions = model.run([label_name], {input_name: images})[-1]
             save_backend.save(predictions, image_paths)
         except Exception as e:
             os.makedirs("errors", exist_ok=True)
