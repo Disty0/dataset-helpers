@@ -49,7 +49,7 @@ class ImageBackend():
         self.load_queue_lenght = 0
         self.keep_loading = True
         self.batches = Queue()
-        self.model_target_size = model_target_size
+        self.model_target_size = (model_target_size, model_target_size)
         self.channels_first = channels_first
         for batch in batches:
             if isinstance(batch, str):
@@ -85,25 +85,29 @@ class ImageBackend():
 
     def load_from_file(self, image_path: str) -> np.ndarray:
         image = Image.open(image_path).convert("RGBA")
-        background = Image.new('RGBA', image.size, (255, 255, 255))
+        image_size = image.size
+
+        background = Image.new('RGBA', image_size, (255, 255, 255))
         image = Image.alpha_composite(background, image).convert("RGB")
 
-        image_shape = image.size
-        max_dim = max(image_shape)
-        if max_dim != self.model_target_size:
-            pad_left = (max_dim - image_shape[0]) // 2
-            pad_top = (max_dim - image_shape[1]) // 2
-            padded_image = Image.new("RGB", (max_dim, max_dim), (255, 255, 255))
-            padded_image.paste(image, (pad_left, pad_top))
-            image = padded_image.resize((self.model_target_size, self.model_target_size), Image.BICUBIC)
+        if image_size != self.model_target_size:
+            if self.channels_first:
+                image = image.resize(self.model_target_size, Image.BILINEAR)
+            else:
+                max_dim = max(image_size)
+                pad_left = (max_dim - image_size[0]) // 2
+                pad_top = (max_dim - image_size[1]) // 2
+                padded_image = Image.new("RGB", (max_dim, max_dim), (255, 255, 255))
+                padded_image.paste(image, (pad_left, pad_top))
+                image = padded_image.resize(self.model_target_size, Image.BICUBIC)
 
-        image_array = np.asarray(image, dtype=np.float32)
+        image = np.asarray(image, dtype=np.float32)
         if self.channels_first:
-            image_array = image_array.transpose(2,0,1) / 255
+            image = (image.transpose(2,0,1) / 127.5) - 1
         else:
-            image_array = image_array[:, :, ::-1] # RGB to BGR
+            image = image[:, :, ::-1] # RGB to BGR
 
-        return image_array
+        return image
 
 
 class SaveTagBackend():
