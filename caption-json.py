@@ -31,18 +31,6 @@ if torch.version.hip:
         print(f"Failed to enable Flash Atten for ROCm: {e}")
 
 try:
-    import ipex_llm
-    ipex_llm_available = True
-except Exception:
-    ipex_llm_available = False
-
-if not ipex_llm_available:
-    try:
-        import intel_extension_for_pytorch as ipex # noqa: F401
-    except Exception:
-        pass
-
-try:
     if torch.xpu.is_available():
         # https://github.com/Disty0/ipex_to_cuda
         # in use for dynamic atten
@@ -52,8 +40,8 @@ try:
 except ImportError:
     pass
 
-
 from transformers import AutoModelForImageTextToText, AutoProcessor, LogitsProcessor, StaticCache, HybridCache
+from accelerate import infer_auto_device_map, dispatch_model
 from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
 from glob import glob
@@ -64,12 +52,6 @@ try:
 except Exception:
     pass
 from PIL import Image # noqa: E402
-
-try:
-    from sdnq import SDNQConfig
-    sdnq_available = True
-except Exception:
-    sdnq_available = False
 
 max_image_size = 1048576 # 1024x1024
 max_new_tokens = 1024
@@ -98,52 +80,61 @@ booru_no_humans_prompt = "There are no humans in this image, don't mention human
 model_repo_lower = model_repo.lower()
 caption_key = model_repo_lower.split("/", maxsplit=1)[-1].replace(".", "-")
 device = torch.device("xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
-dtype = torch.bfloat16 if (not ipex_llm_available and device.type != "cpu") else torch.float16 if ipex_llm_available else torch.float32
+dtype = torch.bfloat16 if device.type != "cpu" else torch.float32
 use_flash_atten = device.type == "cuda" and torch.version.cuda
 use_logits_processor = "qwen2" in model_repo_lower
 is_gemma = "gemma" in model_repo_lower
+is_omni = "omni" in model_repo_lower
 
+model_kwargs = {
+    "use_cache": True,
+    "do_sample": False,
+    "repetition_penalty": 1.025,
+    "max_new_tokens": max_new_tokens,
+}
+if is_omni:
+    model_kwargs["return_audio"] = False
+
+if "qwen3" in model_repo_lower:
+    from transformers import Qwen3OmniMoeForConditionalGeneration
+    model_cls = Qwen3OmniMoeForConditionalGeneration
+else:
+    model_cls = AutoModelForImageTextToText
 
 if device.type == "cpu":
     import psutil
     device_memory = math.ceil(psutil.virtual_memory().available / 1024 / 1024 / 1024)
 else:
     device_memory = math.ceil(getattr(torch, device.type).get_device_properties(device).total_memory / 1024 / 1024 / 1024)
-print(f"Device memory: {device_memory} GB")
 
-model_param_size = model_repo_lower.rsplit("b-", maxsplit=1)[0].rsplit("-", maxsplit=1)[-1].replace("b","")
+max_model_memory = max(1, device_memory-4)
+print(f"Device memory: {device_memory} GB")
+print(f"Max model memory: {max_model_memory} GB")
+
+model_param_size = model_repo_lower.rsplit("b-", maxsplit=1)[0].rsplit("b-a", maxsplit=1)[0].rsplit("-", maxsplit=1)[-1].replace("b","")
 if model_param_size.startswith("e"):
     model_param_size = int(model_param_size.replace("e","")) * 2
 else:
     model_param_size = int(model_param_size)
-model_param_size = model_param_size * 1.075
+model_param_size = round(model_param_size * 1.075, 2)
 print(f"Model parameter size: {model_param_size} B")
 
-quantize_weights = "int8" if sdnq_available and device.type == "cuda" else None
+quantize_weights = "int8" if device.type == "cuda" else None
 use_quantized_matmul = device.type == "cuda"
-ipex_llm_weights = "fp16"
-if ipex_llm_available:
-    if model_param_size < device_memory:
-        ipex_llm_weights = "sym_int8"
-    elif model_param_size / 2 < device_memory:
-        ipex_llm_weights = "sym_int4"
+if quantize_weights is None and model_param_size * 2 < max_model_memory:
+    quantize_weights = None
+elif model_param_size < max_model_memory:
+    quantize_weights = "int8"
+#elif model_param_size / 1.14 < max_model_memory:
+#    quantize_weights = "int7" # int7 is slow
+elif model_param_size / 1.33 < max_model_memory:
+    quantize_weights = "int6"
+elif model_param_size / 1.6 < max_model_memory:
+    quantize_weights = "int5"
+elif model_param_size / 2 < max_model_memory:
+    quantize_weights = "uint4"
 else:
-    if quantize_weights is None and model_param_size * 2 < device_memory:
-        quantize_weights = None
-    if model_param_size < device_memory:
-        quantize_weights = "int8"
-    #elif sdnq_available and model_param_size / 1.14 < device_memory:
-    #    quantize_weights = "int7"
-    elif sdnq_available and model_param_size / 1.33 < device_memory:
-        quantize_weights = "int6"
-    elif sdnq_available and model_param_size / 1.6 < device_memory:
-        quantize_weights = "int5"
-    elif model_param_size / 2 < device_memory:
-        quantize_weights = "uint4" if sdnq_available else "int4"
-    elif sdnq_available:
-        quantize_weights = "uint3"
-    else:
-        quantize_weights = "int4"
+    quantize_weights = "uint3"
 
 print(f"Using quantization type: {quantize_weights}")
 print(f"Use quantized MatMul: {use_quantized_matmul}")
@@ -165,7 +156,7 @@ elif dtype == torch.float32:
 else:
     free_memory = (device_memory - (model_param_size * 2))
 
-free_memory = round(max(free_memory-2, 0), 2)
+free_memory = round(max(free_memory, 0), 2)
 print(f"Free memory for compute: {free_memory} GB")
 
 offload_cache = free_memory < 4
@@ -174,8 +165,10 @@ if is_gemma:
         batch_size = int((free_memory * 2) / math.sqrt(model_param_size))
     else:
         batch_size = int((free_memory * 4) / math.sqrt(model_param_size))
-    if batch_size > 8:
+    if batch_size > 16:
         batch_size -= batch_size % 8
+    if batch_size > 4:
+        batch_size -= batch_size % 4
     else:
         batch_size -= batch_size % 2
     batch_size = max(batch_size, 1)
@@ -585,7 +578,7 @@ class ImageBackend():
                 copyright_tags = ""
                 for batch in batches:
                     image, prompt, sys_prompt_to_use, char_tag = self.load_from_file(batch)
-                    images.append((image,)) # has to be a list of lists for batch size > 1
+                    images.append([image]) # has to be a list of lists for batch size > 1
                     prompt = self.processor.decode(self.processor(text=prompt, images=None, add_special_tokens=False, truncation=True, max_length=max_input_tokens)["input_ids"][0])
                     conversation = [
                         {
@@ -726,32 +719,24 @@ def main():
         torch.cuda.tunable.enable(val=True)
 
     if quantize_weights is not None:
+        from sdnq import SDNQConfig
         modules_to_not_convert = ["correction_coefs", "prediction_coefs", "lm_head", "embedding_projection"]
-        if sdnq_available:
-            quantization_config = SDNQConfig(weights_dtype=quantize_weights, use_quantized_matmul=use_quantized_matmul, quantize_device=device, return_device=device, modules_to_not_convert=modules_to_not_convert)
-        else:
-            from transformers import QuantoConfig
-            quantization_config = QuantoConfig(weights=quantize_weights, modules_to_not_convert=modules_to_not_convert)
+        quantization_config = SDNQConfig(weights_dtype=quantize_weights, use_quantized_matmul=use_quantized_matmul, quantize_device=device, return_device="cpu", modules_to_not_convert=modules_to_not_convert)
     else:
         quantization_config = None
 
     processor = AutoProcessor.from_pretrained(model_repo, use_fast=True)
     if use_logits_processor:
-        logits_processor = [UncensorQwen2()]
-    else:
-        logits_processor = None
-    model = AutoModelForImageTextToText.from_pretrained(
-        model_repo, dtype=dtype, device_map=device if device.type != "xpu" else "cpu", # xpu hits the 4gb alloc limit
-        attn_implementation="flash_attention_2" if use_flash_atten else None,
-        quantization_config=quantization_config,
+        model_kwargs["logits_processor"] = [UncensorQwen2()]
+
+    model = model_cls.from_pretrained(
+        model_repo, dtype=dtype, device_map="cpu", quantization_config=quantization_config,
+        attn_implementation="flash_attention_2" if use_flash_atten else "sdpa",
     ).eval()
     model.requires_grad_(False)
     model.generation_config.update(temperature=None, top_k=None, top_p=None)
 
-    if ipex_llm_available:
-        model = ipex_llm.optimize_model(model, low_bit=ipex_llm_weights)
-    if device.type == "xpu" or (sdnq_available and quantize_weights is not None):
-        model = model.to(device)
+    model = dispatch_model(model, device_map=infer_auto_device_map(model, max_memory={device.index or 0: f"{max_model_memory}GB", "cpu": "4096GB"}))
 
     if use_torch_compile:
         if is_gemma:
@@ -851,10 +836,7 @@ def main():
             getattr(torch, device.type).empty_cache()
 
         model.generation_config.update(cache_implementation=None)
-        cache_implementation = None
-    else:
-        past_key_values = None
-        cache_implementation = "hybrid" if is_gemma else None
+        model_kwargs["cache_implementation"] = None
 
     print("Starting to caption...")
     for _ in tqdm(range(epoch_len)):
@@ -871,17 +853,12 @@ def main():
                     for i in range(len(past_key_values.key_cache)):
                         past_key_values.key_cache[i] = past_key_values.key_cache[i].to(device)
                         past_key_values.value_cache[i] = past_key_values.value_cache[i].to(device)
+                model_kwargs["past_key_values"] = past_key_values
 
-            output_ids = model.generate(
-                **inputs,
-                use_cache=True,
-                do_sample=False,
-                repetition_penalty=1.025,
-                max_new_tokens=max_new_tokens,
-                logits_processor=logits_processor,
-                past_key_values=past_key_values,
-                cache_implementation=cache_implementation,
-            )
+            output_ids = model.generate(**inputs, **model_kwargs)
+            if is_omni:
+                # output_ids, audio = model_run(...)
+                output_ids = output_ids[0]
             generated_ids = [
                 output_ids[len(input_ids) :]
                 for input_ids, output_ids in zip(inputs.input_ids, output_ids)

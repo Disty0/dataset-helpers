@@ -52,7 +52,7 @@ from typing import Dict, List, Tuple, Union
 
 batch_size = 32
 max_new_tokens = 1024
-max_input_tokens = 1280
+max_input_tokens = 768
 use_tunable_ops = False
 use_torch_compile = False
 model_repo = "Disty0/Florence-2-base-PromptGen-v1.5"
