@@ -13,6 +13,7 @@ key_to_remove_list = [
     #"florence-2-base-promptgen-v1-5",
     #"gemma-3-12b-it",
     #"qwen2.5-vl-7b-instruct",
+    #"qwen3-omni-30b-a3b-instruct",
 ]
 
 total_cleanup = 0
