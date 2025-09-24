@@ -142,8 +142,8 @@ else:
 model_param_size = round(model_param_size * 1.075, 2)
 print(f"Model parameter size: {model_param_size} B")
 
-quantize_weights = "int8" if device.type == "cuda" else None
-use_quantized_matmul = device.type == "cuda"
+quantize_weights = "int8" if is_gemma else None # prefer more batch size
+use_quantized_matmul = bool(is_gemma and device.type == "cuda")
 if quantize_weights is None and model_param_size * 2 < max_model_memory:
     quantize_weights = None
 elif model_param_size < max_model_memory:
