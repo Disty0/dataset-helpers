@@ -129,6 +129,8 @@ else:
     device_memory = math.ceil(getattr(torch, device.type).get_device_properties(device).total_memory / 1024 / 1024 / 1024)
 
 max_model_memory = max(1, device_memory-4)
+print(f"Model repo: {model_repo}")
+print(f"Caption key: {caption_key}")
 print(f"Device memory: {device_memory} GB")
 print(f"Max model memory: {max_model_memory} GB")
 
