@@ -82,6 +82,7 @@ img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 model_repo = "google/gemma-3n-E4B-it"
+#model_repo = "google/gemma-3-27b-it"
 #model_repo = "Qwen/Qwen3-Omni-30B-A3B-Instruct"
 #model_repo = "Qwen/Qwen2.5-VL-7B-Instruct"
 
@@ -741,7 +742,7 @@ def main():
     if quantize_weights is not None:
         from sdnq import SDNQConfig
         modules_to_not_convert = ["correction_coefs", "prediction_coefs", "lm_head", "embedding_projection"]
-        quantization_config = SDNQConfig(weights_dtype=quantize_weights, use_quantized_matmul=use_quantized_matmul, quantize_device=device, return_device="cpu", modules_to_not_convert=modules_to_not_convert)
+        quantization_config = SDNQConfig(weights_dtype=quantize_weights, use_quantized_matmul=use_quantized_matmul, quantization_device=device, return_device="cpu", modules_to_not_convert=modules_to_not_convert)
     else:
         quantization_config = None
 

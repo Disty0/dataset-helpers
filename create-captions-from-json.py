@@ -361,7 +361,7 @@ def main(out_path: str, caption_key: str):
     exit_handler(save_backend)
 
 if __name__ == '__main__':
-    #caption_keys: gemma-3n-e4b-it, qwen2.5-vl-7b-instruct, qwen3-omni-30b-a3b-instruct, florence-2-base-promptgen-v1-5
+    #caption_keys: gemma-3n-e4b-it, gemma-3-27b-it, qwen2.5-vl-7b-instruct, qwen3-omni-30b-a3b-instruct, florence-2-base-promptgen-v1-5
     parser = argparse.ArgumentParser(description='Create tags from json')
     parser.add_argument('--out_path', default="", type=str)
     parser.add_argument('--caption_key', default="gemma-3n-e4b-it", type=str)

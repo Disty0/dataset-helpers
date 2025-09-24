@@ -10,10 +10,11 @@ img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 key_to_remove_list = [
     #"gemma-3n-e4b-it",
     #"gemma-3-4b-it",
-    #"florence-2-base-promptgen-v1-5",
     #"gemma-3-12b-it",
+    #"gemma-3-27b-it",
     #"qwen2.5-vl-7b-instruct",
     #"qwen3-omni-30b-a3b-instruct",
+    #"florence-2-base-promptgen-v1-5",
 ]
 
 total_cleanup = 0
