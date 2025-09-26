@@ -209,8 +209,8 @@ for ext in img_ext_list:
     file_list.extend(glob(f"**/*.{ext}"))
 
 os.makedirs("out", exist_ok=True)
-small_res_file = open("out/small_res_check.txt", 'a')
-small_res_pixel_art_file = open("out/small_res_pixel_art.txt", 'a')
+small_res_file = open("out/small_res_check.txt", "a")
+small_res_pixel_art_file = open("out/small_res_pixel_art.txt", "a")
 
 for image_path in tqdm(file_list):
     try:
@@ -241,7 +241,7 @@ for image_path in tqdm(file_list):
                 small_res_pixel_art_file.write(image_path+"\n")
     except Exception as e:
         os.makedirs("errors", exist_ok=True)
-        error_file = open("errors/errors.txt", 'a')
+        error_file = open("errors/errors.txt", "a")
         error_file.write(f"ERROR: {image_path} MESSAGE: {e}\n")
         error_file.close()
 small_res_file.close()

@@ -20,7 +20,7 @@ key_to_remove_list = [
 total_cleanup = 0
 
 os.makedirs("out", exist_ok=True)
-out_file = open("out/out_edit.txt", 'a')
+out_file = open("out/out_edit.txt", "a")
 
 print(f"Searching for {img_ext_list} files...")
 file_list = []
@@ -57,7 +57,7 @@ for image_path in file_list:
             out_file.write(json_path+"\n")
     except Exception as e:
         os.makedirs("errors", exist_ok=True)
-        error_file = open("errors/errors.txt", 'a')
+        error_file = open("errors/errors.txt", "a")
         error_file.write(f"ERROR: {image_path} MESSAGE: {e}\n")
         error_file.close()
     progress_bar.set_postfix(cleanup=total_cleanup)

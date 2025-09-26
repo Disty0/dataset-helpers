@@ -21,7 +21,7 @@ for ext in img_ext_list:
     file_list.extend(glob(f"**/*.{ext}"))
 
 os.makedirs("out", exist_ok=True)
-resized_jxl_file = open("out/resized_jxl.txt", 'a')
+resized_jxl_file = open("out/resized_jxl.txt", "a")
 
 for image_path in tqdm(file_list):
     try:
@@ -45,7 +45,7 @@ for image_path in tqdm(file_list):
                 os.remove(image_path)
     except Exception as e:
         os.makedirs("errors", exist_ok=True)
-        error_file = open("errors/errors.txt", 'a')
+        error_file = open("errors/errors.txt", "a")
         error_file.write(f"ERROR: {image_path} MESSAGE: {e}\n")
         error_file.close()
 

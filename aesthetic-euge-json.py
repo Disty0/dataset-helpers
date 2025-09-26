@@ -42,7 +42,7 @@ Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 
 class MLP(pl.LightningModule):
-    def __init__(self, input_size: int, xcol: str = 'emb', ycol: str = 'avg_rating', batch_norm: bool = True):
+    def __init__(self, input_size: int, xcol: str = "emb", ycol: str = "avg_rating", batch_norm: bool = True):
         super().__init__()
         self.input_size = input_size
         self.xcol = xcol
@@ -105,7 +105,7 @@ class ImageBackend():
                 images = []
                 for batch in batches:
                     images.append(self.load_from_file(batch))
-                inputs = self.processor(images=images, return_tensors='pt')['pixel_values'].to(dtype=dtype)
+                inputs = self.processor(images=images, return_tensors="pt")["pixel_values"].to(dtype=dtype)
                 self.load_queue.put((inputs, batches))
                 self.load_queue_lenght += 1
             else:
@@ -114,7 +114,7 @@ class ImageBackend():
 
     def load_from_file(self, image_path: str) -> Image.Image:
         image = Image.open(image_path).convert("RGBA")
-        background = Image.new('RGBA', image.size, (255, 255, 255))
+        background = Image.new("RGBA", image.size, (255, 255, 255))
         image = Image.alpha_composite(background, image).convert("RGB")
         return image
 
@@ -153,7 +153,7 @@ class SaveAestheticBackend():
 def main():
     steps_after_gc = -1
 
-    torch.set_float32_matmul_precision('high')
+    torch.set_float32_matmul_precision("high")
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
 
@@ -177,7 +177,7 @@ def main():
     aes_model.load_state_dict(torch.load(
         huggingface_hub.hf_hub_download(
             repo_id=model_repo,
-            repo_type='model',
+            repo_type="model",
             filename=model_filename
         ),
         map_location="cpu"))
@@ -243,7 +243,7 @@ def main():
             save_backend.save(predictions, image_paths)
         except Exception as e:
             os.makedirs("errors", exist_ok=True)
-            error_file = open("errors/errors.txt", 'a')
+            error_file = open("errors/errors.txt", "a")
             error_file.write(f"ERROR: {image_paths} MESSAGE: {e} \n")
             error_file.close()
         steps_after_gc = steps_after_gc + 1
@@ -257,5 +257,5 @@ def main():
     atexit.unregister(exit_handler)
     exit_handler(image_backend, save_backend)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

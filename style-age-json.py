@@ -68,7 +68,7 @@ class ImageBackend():
 
     def load_from_file(self, image_path: str) -> np.ndarray:
         image = Image.open(image_path).convert("RGBA")
-        background = Image.new('RGBA', image.size, (255, 255, 255))
+        background = Image.new("RGBA", image.size, (255, 255, 255))
         image = Image.alpha_composite(background, image).convert("RGB")
         image = image.resize((384, 384), Image.BICUBIC)
         image_array = np.asarray(image)
@@ -135,7 +135,7 @@ def main():
         model = ort.InferenceSession(
             model_path,
             providers=(["OpenVINOExecutionProvider"]),
-            provider_options=[{'device_type' : "GPU", "precision": "FP16"}],
+            provider_options=[{"device_type" : "GPU", "precision": "FP16"}],
         )
     else:
         model = ort.InferenceSession(
@@ -194,11 +194,11 @@ def main():
     for _ in tqdm(range(epoch_len)):
         try:
             images, image_paths = image_backend.get_images()
-            predictions = model.run(['output'], {'input': images})[0]
+            predictions = model.run(["output"], {"input": images})[0]
             save_backend.save(predictions, image_paths)
         except Exception as e:
             os.makedirs("errors", exist_ok=True)
-            error_file = open("errors/errors.txt", 'a')
+            error_file = open("errors/errors.txt", "a")
             error_file.write(f"ERROR: {image_paths} MESSAGE: {e} \n")
             error_file.close()
         steps_after_gc = steps_after_gc + 1
@@ -209,5 +209,5 @@ def main():
     atexit.unregister(exit_handler)
     exit_handler(image_backend, save_backend)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

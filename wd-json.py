@@ -87,7 +87,7 @@ class ImageBackend():
         image = Image.open(image_path).convert("RGBA")
         image_size = image.size
 
-        background = Image.new('RGBA', image_size, (255, 255, 255))
+        background = Image.new("RGBA", image_size, (255, 255, 255))
         image = Image.alpha_composite(background, image).convert("RGB")
 
         if image_size != self.model_target_size:
@@ -217,7 +217,7 @@ def main():
         model = ort.InferenceSession(
             model_path,
             providers=(["OpenVINOExecutionProvider"]),
-            provider_options=[{'device_type' : "GPU", "precision": "FP32"}],
+            provider_options=[{"device_type" : "GPU", "precision": "FP32"}],
         )
     else:
         model = ort.InferenceSession(
@@ -229,9 +229,9 @@ def main():
             ),
         )
 
-    # wd_in: 'batch_size', 448, 448, 3
+    # wd_in: batch_size, 448, 448, 3
     # wd_out: output
-    # pixai_in: 'batch_size', 3, 448, 448
+    # pixai_in: batch_size, 3, 448, 448
     # pixai_out embedding, logits, prediction
 
     input_shapes = model.get_inputs()[-1]
@@ -297,7 +297,7 @@ def main():
             save_backend.save(predictions, image_paths)
         except Exception as e:
             os.makedirs("errors", exist_ok=True)
-            error_file = open("errors/errors.txt", 'a')
+            error_file = open("errors/errors.txt", "a")
             error_file.write(f"ERROR: {image_paths} MESSAGE: {e} \n")
             error_file.close()
         steps_after_gc = steps_after_gc + 1
@@ -308,5 +308,5 @@ def main():
     atexit.unregister(exit_handler)
     exit_handler(image_backend, save_backend)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

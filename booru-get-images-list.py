@@ -19,8 +19,8 @@ if image_ext == ".jxl":
 from PIL import Image # noqa: E402
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
-parser = argparse.ArgumentParser(description='Get images from danbooru')
-parser.add_argument('list', type=str)
+parser = argparse.ArgumentParser(description="Get images from danbooru")
+parser.add_argument("list", type=str)
 
 args = parser.parse_args()
 
@@ -132,7 +132,7 @@ for id in tqdm(id_list):
                 str_e = str(e)
                 if not ("In _request: 404 - Not Found" in str_e and str_e.endswith(".json")):
                     os.makedirs("errors", exist_ok=True)
-                    error_file = open("errors/errors_json_list.txt", 'a')
+                    error_file = open("errors/errors_json_list.txt", "a")
                     error_file.write(f"ERROR: {id} MESSAGE: {str_e}\n")
                     error_file.close()
                 continue
@@ -195,6 +195,6 @@ for id in tqdm(id_list):
                 str_e = str(e)
                 if str_e != "'file_url'":
                     os.makedirs("errors", exist_ok=True)
-                    error_file = open("errors/errors_list.txt", 'a')
+                    error_file = open("errors/errors_list.txt", "a")
                     error_file.write(f"ERROR: {id} MESSAGE: {str_e}\n")
                     error_file.close()

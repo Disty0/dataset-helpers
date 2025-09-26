@@ -449,7 +449,7 @@ class ImageBackend():
             if booru_tags:
                 prompt += " These are the tags for the anime image, you can use them for guidence: " + booru_tags
         image = Image.open(image_path).convert("RGBA")
-        background = Image.new('RGBA', image.size, (255, 255, 255))
+        background = Image.new("RGBA", image.size, (255, 255, 255))
         image = Image.alpha_composite(background, image).convert("RGB")
         return (image, prompt)
 
@@ -490,7 +490,7 @@ class SaveCaptionBackend():
 def main():
     steps_after_gc = -1
 
-    torch.set_float32_matmul_precision('high')
+    torch.set_float32_matmul_precision("high")
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
 
@@ -590,7 +590,7 @@ def main():
             save_backend.save(generated_ids, image_paths)
         except Exception as e:
             os.makedirs("errors", exist_ok=True)
-            error_file = open("errors/errors.txt", 'a')
+            error_file = open("errors/errors.txt", "a")
             error_file.write(f"ERROR: {image_paths} MESSAGE: {e} \n")
             error_file.close()
         steps_after_gc = steps_after_gc + 1
@@ -604,5 +604,5 @@ def main():
     atexit.unregister(exit_handler)
     exit_handler(image_backend, save_backend)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -219,11 +219,11 @@ def cleanup_caption(caption: str, is_gemma: bool, json_data: dict = None) -> str
             caption = caption.removesuffix(old_tag)
             caption = cleanup_whitespace(caption)
     if " tag" in caption.lower() and len(caption.split('", ')) > 5:
-        caption = caption.replace('The image is tagged with ', '')
-        caption = caption.replace('", and "', ', ')
-        caption = caption.replace('" and "', ', ')
-        caption = caption.replace('"', '')
-        caption = caption.replace('\n ', '\n')
+        caption = caption.replace("The image is tagged with ", "")
+        caption = caption.replace('", and "', ", ")
+        caption = caption.replace('" and "', ", ")
+        caption = caption.replace('"', "")
+        caption = caption.replace("\n ", "\n")
         caption = cleanup_whitespace(caption)
     if is_gemma:
         done_gemma_cleanup = False
@@ -349,7 +349,7 @@ def main(out_path: str, caption_key: str):
             save_backend.save(captions, os.path.splitext(json_path)[0]+".txt")
         except Exception as e:
             os.makedirs("errors", exist_ok=True)
-            error_file = open("errors/errors.txt", 'a')
+            error_file = open("errors/errors.txt", "a")
             error_file.write(f"ERROR: {json_path} MESSAGE: {e} \n")
             error_file.close()
         steps_after_gc = steps_after_gc + 1
@@ -360,10 +360,10 @@ def main(out_path: str, caption_key: str):
     atexit.unregister(exit_handler)
     exit_handler(save_backend)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     #caption_keys: gemma-3n-e4b-it, gemma-3-27b-it, qwen2.5-vl-7b-instruct, qwen3-omni-30b-a3b-instruct, florence-2-base-promptgen-v1-5
-    parser = argparse.ArgumentParser(description='Create tags from json')
-    parser.add_argument('--out_path', default="", type=str)
-    parser.add_argument('--caption_key', default="gemma-3n-e4b-it", type=str)
+    parser = argparse.ArgumentParser(description="Create tags from json")
+    parser.add_argument("--out_path", default="", type=str)
+    parser.add_argument("--caption_key", default="gemma-3n-e4b-it", type=str)
     args = parser.parse_args()
     main(args.out_path, args.caption_key)

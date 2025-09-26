@@ -86,7 +86,7 @@ meta_blacklist = (
 )
 
 os.makedirs("out", exist_ok=True)
-out_file = open("out/tag_check.txt", 'a')
+out_file = open("out/tag_check.txt", "a")
 
 print(f"Searching for {img_ext_list} files...")
 file_list = []
@@ -118,7 +118,7 @@ for image_path in file_list:
             out_file.write(image_path+"\n")
     except Exception as e:
         os.makedirs("errors", exist_ok=True)
-        error_file = open("errors/errors.txt", 'a')
+        error_file = open("errors/errors.txt", "a")
         error_file.write(f"ERROR: {image_path} MESSAGE: {e}\n")
         error_file.close()
     progress_bar.set_postfix(cleanup=bad_image_count)

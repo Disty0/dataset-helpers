@@ -18,9 +18,9 @@ if image_ext == ".jxl":
 from PIL import Image # noqa: E402
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
-parser = argparse.ArgumentParser(description='Get images from danbooru')
-parser.add_argument('start', type=int)
-parser.add_argument('end', type=int)
+parser = argparse.ArgumentParser(description="Get images from danbooru")
+parser.add_argument("start", type=int)
+parser.add_argument("end", type=int)
 args = parser.parse_args()
 
 general_blacklist = (
@@ -122,7 +122,7 @@ for id in tqdm(range(args.start, args.end)):
                 str_e = str(e)
                 if not ("In _request: 404 - Not Found" in str_e and str_e.endswith(".json")):
                     os.makedirs("errors", exist_ok=True)
-                    error_file = open(f"errors/errors_json{args.start}.txt", 'a')
+                    error_file = open(f"errors/errors_json{args.start}.txt", "a")
                     error_file.write(f"ERROR: {id} MESSAGE: {str_e}\n")
                     error_file.close()
                 continue
@@ -180,6 +180,6 @@ for id in tqdm(range(args.start, args.end)):
                 str_e = str(e)
                 if str_e != "'file_url'":
                     os.makedirs("errors", exist_ok=True)
-                    error_file = open(f"errors/errors{args.start}.txt", 'a')
+                    error_file = open(f"errors/errors{args.start}.txt", "a")
                     error_file.write(f"ERROR: {id} MESSAGE: {str_e}\n")
                     error_file.close()

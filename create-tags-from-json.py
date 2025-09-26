@@ -429,7 +429,7 @@ def main(out_path: str, caption_key: str, no_shuffle: bool, general_only: bool):
             save_backend.save(tags, os.path.splitext(json_path)[0]+".txt")
         except Exception as e:
             os.makedirs("errors", exist_ok=True)
-            error_file = open("errors/errors.txt", 'a')
+            error_file = open("errors/errors.txt", "a")
             error_file.write(f"ERROR: {json_path} MESSAGE: {e} \n")
             error_file.close()
         steps_after_gc = steps_after_gc + 1
@@ -440,12 +440,12 @@ def main(out_path: str, caption_key: str, no_shuffle: bool, general_only: bool):
     atexit.unregister(exit_handler)
     exit_handler(save_backend)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     #caption_keys: wd, pixiv
-    parser = argparse.ArgumentParser(description='Create tags from json')
-    parser.add_argument('--out_path', default="", type=str)
-    parser.add_argument('--caption_key', default="wd", type=str)
-    parser.add_argument('--no_shuffle', default=False, action='store_true')
-    parser.add_argument('--general_only', default=False, action='store_true')
+    parser = argparse.ArgumentParser(description="Create tags from json")
+    parser.add_argument("--out_path", default="", type=str)
+    parser.add_argument("--caption_key", default="wd", type=str)
+    parser.add_argument("--no_shuffle", default=False, action="store_true")
+    parser.add_argument("--general_only", default=False, action="store_true")
     args = parser.parse_args()
     main(args.out_path, args.caption_key, args.no_shuffle, args.general_only)

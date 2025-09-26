@@ -23,11 +23,11 @@ for image_path in tqdm(file_list):
     try:
         image = Image.open(image_path)
         image = image.convert("RGBA")
-        background = Image.new('RGBA', image.size, (255, 255, 255))
+        background = Image.new("RGBA", image.size, (255, 255, 255))
         image = Image.alpha_composite(background, image).convert("RGB")
         image.close()
     except Exception as e:
         os.makedirs("errors", exist_ok=True)
-        error_file = open("errors/errors.txt", 'a')
+        error_file = open("errors/errors.txt", "a")
         error_file.write(f"ERROR: {image_path} MESSAGE: {e}\n")
         error_file.close()

@@ -69,21 +69,21 @@ def get_json_data(session, id):
     return json_data
 
 
-parser = argparse.ArgumentParser(description='Get images from anime-pictures.net')
-parser.add_argument('start', type=int)
-parser.add_argument('end', type=int)
-parser.add_argument('--jwt', default='', type=str)
+parser = argparse.ArgumentParser(description="Get images from anime-pictures.net")
+parser.add_argument("start", type=int)
+parser.add_argument("end", type=int)
+parser.add_argument("--jwt", default="", type=str)
 args = parser.parse_args()
 
 session = requests.Session() 
 session.headers["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64; rv:142.0) Gecko/20100101 Firefox/142.0"
-session.cookies.set("kira", str(args.end + 1), domain='.anime-pictures.net')
+session.cookies.set("kira", str(args.end + 1), domain=".anime-pictures.net")
 
-# anime_pictures_jwt is used for login. Get anime_pictures_jwt string from 'F12 -> storage' in your browser
+# anime_pictures_jwt is used for login. Get anime_pictures_jwt string from F12 -> storage in your browser
 if len(args.jwt) > 0:
-    session.cookies.set("anime_pictures_jwt", args.jwt, domain='.anime-pictures.net')
-elif len(os.environ.get('ANIME_PICTURES_JWT', '')) > 0:
-    session.cookies.set("anime_pictures_jwt", os.environ.get('ANIME_PICTURES_JWT'), domain='.anime-pictures.net')
+    session.cookies.set("anime_pictures_jwt", args.jwt, domain=".anime-pictures.net")
+elif len(os.environ.get("ANIME_PICTURES_JWT", "")) > 0:
+    session.cookies.set("anime_pictures_jwt", os.environ.get("ANIME_PICTURES_JWT"), domain=".anime-pictures.net")
 
 general_blacklist = (
     "what",
@@ -182,7 +182,7 @@ for id in tqdm(range(args.start, args.end)):
                     json.dump(image_data, f)
             except Exception as e:
                 os.makedirs("errors", exist_ok=True)
-                error_file = open(f"errors/errors_json{args.start}.txt", 'a')
+                error_file = open(f"errors/errors_json{args.start}.txt", "a")
                 error_file.write(f"ERROR: {id} MESSAGE: {str(e)}\n")
                 error_file.close()
                 continue
@@ -231,14 +231,14 @@ for id in tqdm(range(args.start, args.end)):
                 image.close()
                 if jpg_path is not None and os.path.exists(jpg_path):
                     os.remove(jpg_path)
-                time.sleep(0.5)
+                time.sleep(0.25)
             except Exception as e:
-                time.sleep(2)
+                time.sleep(1)
                 if jpg_path is not None and os.path.exists(jpg_path):
                     os.remove(jpg_path)
                 str_e = str(e)
                 if str_e != "'file_url'":
                     os.makedirs("errors", exist_ok=True)
-                    error_file = open(f"errors/errors{args.start}.txt", 'a')
+                    error_file = open(f"errors/errors{args.start}.txt", "a")
                     error_file.write(f"ERROR: {id} MESSAGE: {str_e}\n")
                     error_file.close()

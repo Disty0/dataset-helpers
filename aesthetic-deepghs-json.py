@@ -71,7 +71,7 @@ class ImageBackend():
 
     def load_from_file(self, image_path: str) -> np.ndarray:
         image = Image.open(image_path).convert("RGBA")
-        background = Image.new('RGBA', image.size, (255, 255, 255))
+        background = Image.new("RGBA", image.size, (255, 255, 255))
         image = Image.alpha_composite(background, image).convert("RGB")
         image = image.resize((448, 448), Image.BICUBIC)
         image_array = np.asarray(image)
@@ -132,12 +132,12 @@ def main():
     steps_after_gc = -1
     model_config_path = huggingface_hub.hf_hub_download(
         repo_id=model_repo,
-        repo_type='model',
+        repo_type="model",
         filename=model_name + "/" + label_filename,
     )
     model_path = huggingface_hub.hf_hub_download(
         repo_id=model_repo,
-        repo_type='model',
+        repo_type="model",
         filename=model_name + "/" + model_filename,
     )
 
@@ -146,14 +146,14 @@ def main():
 
     df = pd.read_csv(huggingface_hub.hf_hub_download(
         repo_id=model_repo,
-        repo_type='model',
+        repo_type="model",
         filename=model_name + "/" + samples_filename,
     ))
-    df = df.sort_values(['score'])
-    df['cnt'] = list(range(len(df)))
-    df['final_score'] = df['cnt'] / len(df)
+    df = df.sort_values(["score"])
+    df["cnt"] = list(range(len(df)))
+    df["final_score"] = df["cnt"] / len(df)
 
-    mark_table = [np.concatenate([[0.0], df['score'], [6.0]]), np.concatenate([[0.0], df['final_score'], [1.0]])]
+    mark_table = [np.concatenate([[0.0], df["score"], [6.0]]), np.concatenate([[0.0], df["final_score"], [1.0]])]
     del df
 
     if "OpenVINOExecutionProvider" in ort.get_available_providers():
@@ -161,7 +161,7 @@ def main():
         model = ort.InferenceSession(
             model_path,
             providers=(["OpenVINOExecutionProvider"]),
-            provider_options=[{'device_type' : "GPU", "precision": "FP16"}],
+            provider_options=[{"device_type" : "GPU", "precision": "FP16"}],
         )
     else:
         model = ort.InferenceSession(
@@ -220,11 +220,11 @@ def main():
     for _ in tqdm(range(epoch_len)):
         try:
             images, image_paths = image_backend.get_images()
-            predictions = model.run(['output'], {'input': images})[0]
+            predictions = model.run(["output"], {"input": images})[0]
             save_backend.save(predictions, image_paths)
         except Exception as e:
             os.makedirs("errors", exist_ok=True)
-            error_file = open("errors/errors.txt", 'a')
+            error_file = open("errors/errors.txt", "a")
             error_file.write(f"ERROR: {image_paths} MESSAGE: {e} \n")
             error_file.close()
         steps_after_gc = steps_after_gc + 1
@@ -235,5 +235,5 @@ def main():
     atexit.unregister(exit_handler)
     exit_handler(image_backend, save_backend)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -23,20 +23,20 @@ def write_tag(file_name: str) -> None:
 
 
 print("Searching for TXT files...")
-file_list = glob.glob('**/*.txt')
+file_list = glob.glob("**/*.txt")
 
 os.makedirs("out", exist_ok=True)
 
-tags_list = open("out/tags_list.txt", 'w')
-tags_file_list = open("out/tags_file_list.txt", 'w')
-words_list = open("out/words_list.txt", 'w')
+tags_list = open("out/tags_list.txt", "w")
+tags_file_list = open("out/tags_file_list.txt", "w")
+words_list = open("out/words_list.txt", "w")
 
 for text_path in tqdm(file_list):
     try:
         write_tag(text_path)
     except Exception as e:
         os.makedirs("errors", exist_ok=True)
-        error_file = open("errors/errors.txt", 'a')
+        error_file = open("errors/errors.txt", "a")
         error_file.write(f"ERROR: {text_path} MESSAGE: {e} \n")
         error_file.close()
     steps_after_gc = steps_after_gc + 1

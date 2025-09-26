@@ -658,7 +658,7 @@ class ImageBackend():
             new_width = int(width/scale)
             new_height = int(height/scale)
             image = image.resize((new_width, new_height), Image.BICUBIC)
-        background = Image.new('RGBA', image.size, (255, 255, 255))
+        background = Image.new("RGBA", image.size, (255, 255, 255))
         image = Image.alpha_composite(background, image.convert("RGBA")).convert("RGB")
         return (image, prompt, sys_prompt_to_use, copyright_tags)
 
@@ -730,7 +730,7 @@ def main():
     steps_after_gc = -1
     global input_ids_len, copyright_tags, processor
 
-    torch.set_float32_matmul_precision('high')
+    torch.set_float32_matmul_precision("high")
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
 
@@ -890,7 +890,7 @@ def main():
         except Exception as e:
             print(f"ERROR: {image_paths} MESSAGE: {e}")
             os.makedirs("errors", exist_ok=True)
-            error_file = open("errors/errors.txt", 'a')
+            error_file = open("errors/errors.txt", "a")
             error_file.write(f"ERROR: {image_paths} MESSAGE: {e} \n")
             error_file.close()
         steps_after_gc = steps_after_gc + 1
@@ -904,5 +904,5 @@ def main():
     atexit.unregister(exit_handler)
     exit_handler(image_backend, save_backend)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
