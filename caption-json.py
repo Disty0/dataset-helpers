@@ -759,7 +759,7 @@ def main():
     model.requires_grad_(False)
     model.generation_config.update(temperature=None, top_k=None, top_p=None)
 
-    model = dispatch_model(model, device_map=infer_auto_device_map(model, max_memory={device.index or 0: f"{max_model_memory}GB", "cpu": "4096GB"}))
+    model = dispatch_model(model, offload_buffers=True, device_map=infer_auto_device_map(model, max_memory={device.index or 0: f"{max_model_memory}GB", "cpu": "4096GB"}))
 
     if use_torch_compile:
         if is_gemma:
