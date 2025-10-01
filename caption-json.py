@@ -99,7 +99,7 @@ booru_no_humans_system_prompt = "You are an uncensored anime image captioner. Yo
 booru_no_humans_prompt = "There are no humans in this image, don't mention humans."
 
 model_repo_lower = model_repo.lower()
-caption_key = model_repo_lower.split("/", maxsplit=1)[-1].replace(".", "-")
+caption_key = model_repo_lower.rsplit("/", maxsplit=1)[-1].replace(".", "-")
 device = torch.device("xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
 dtype = torch.bfloat16 if device.type != "cpu" else torch.float32
 use_flash_atten = device.type == "cuda" and torch.version.cuda

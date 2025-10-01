@@ -33,7 +33,7 @@ MODEL_FILENAME = "model.onnx"
 LABEL_FILENAME = "selected_tags.csv"
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
-caption_key = model_repo.split("/", maxsplit=1)[-1].split("-", maxsplit=1)[0].replace(".", "-").lower()
+caption_key = model_repo.rsplit("/", maxsplit=1)[-1].split("-", maxsplit=1)[0].replace(".", "-").lower()
 
 
 rating_map = {
