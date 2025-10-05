@@ -83,7 +83,7 @@ Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 model_repo = "google/gemma-3n-E4B-it"
 #model_repo = "google/gemma-3-27b-it"
-#model_repo = "Qwen/Qwen3-Omni-30B-A3B-Instruct"
+#model_repo = "Qwen/Qwen3-VL-30B-A3B-Instruct"
 #model_repo = "Qwen/Qwen2.5-VL-7B-Instruct"
 
 tag_dict_path = os.path.join(os.path.dirname(__file__), "tag_dict.json")
