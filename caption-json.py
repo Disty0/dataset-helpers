@@ -116,7 +116,7 @@ model_kwargs = {
 if is_omni:
     model_kwargs["return_audio"] = False
 
-if "qwen3" in model_repo_lower:
+if "qwen3-omni" in model_repo_lower:
     from transformers import Qwen3OmniMoeForConditionalGeneration
     model_cls = Qwen3OmniMoeForConditionalGeneration
 else:
