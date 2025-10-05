@@ -83,8 +83,9 @@ Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 model_repo = "google/gemma-3n-E4B-it"
 #model_repo = "google/gemma-3-27b-it"
-#model_repo = "Qwen/Qwen3-VL-30B-A3B-Instruct"
 #model_repo = "Qwen/Qwen2.5-VL-7B-Instruct"
+#model_repo = "Qwen/Qwen3-VL-30B-A3B-Instruct"
+#model_repo = "OpenGVLab/InternVL3_5-30B-A3B-HF"
 
 tag_dict_path = os.path.join(os.path.dirname(__file__), "tag_dict.json")
 char_dict_path = os.path.join(os.path.dirname(__file__), "char_dict.json")
@@ -163,27 +164,27 @@ print(f"Using quantization type: {quantize_weights}")
 print(f"Use quantized MatMul: {use_quantized_matmul}")
 
 if quantize_weights == "uint3":
-    free_memory = (device_memory - (model_param_size / 2.66))
-elif quantize_weights in {"int4", "sym_int4"}:
-    free_memory = (device_memory - (model_param_size / 2))
+    free_memory = (device_memory - min(max_model_memory, model_param_size / 2.66))
+elif quantize_weights in {"int4", "uint4"}:
+    free_memory = (device_memory - min(max_model_memory, model_param_size / 2))
 elif quantize_weights == "int5":
-    free_memory = (device_memory - (model_param_size / 1.6))
+    free_memory = (device_memory - min(max_model_memory, model_param_size / 1.6))
 elif quantize_weights == "int6":
-    free_memory = (device_memory - (model_param_size / 1.33))
+    free_memory = (device_memory - min(max_model_memory, model_param_size / 1.33))
 elif quantize_weights == "int7":
-    free_memory = (device_memory - (model_param_size / 1.14))
+    free_memory = (device_memory - min(max_model_memory, model_param_size / 1.14))
 elif quantize_weights in {"int8", "sym_int8"}:
-    free_memory = (device_memory - (model_param_size))
+    free_memory = (device_memory - min(max_model_memory, model_param_size))
 elif dtype == torch.float32:
-    free_memory = (device_memory - (model_param_size * 4))
+    free_memory = (device_memory - min(max_model_memory, model_param_size * 4))
 else:
-    free_memory = (device_memory - (model_param_size * 2))
+    free_memory = (device_memory - min(max_model_memory, model_param_size * 2))
 
-free_memory = round(max(free_memory-2, 0), 2)
+free_memory = round(max(free_memory, 0), 2)
 print(f"Free memory for compute: {free_memory} GB")
 
 offload_cache = free_memory < 4
-if is_gemma:
+if "qwen" not in model_repo_lower:
     if dtype == torch.float32:
         batch_size = int((free_memory * 2) / math.sqrt(model_param_size))
     else:
@@ -759,7 +760,13 @@ def main():
     model.requires_grad_(False)
     model.generation_config.update(temperature=None, top_k=None, top_p=None)
 
+    print("Model size:", round(sum(p.numel() * p.element_size() for p in model.parameters()) / 1024 / 1024 / 1024, 2), "GB")
     model = dispatch_model(model, device_map=infer_auto_device_map(model, max_memory={device.index or 0: f"{max_model_memory}GB", "cpu": "4096GB"}))
+
+    gc.collect()
+    if device.type != "cpu":
+        getattr(torch, device.type).synchronize()
+        getattr(torch, device.type).empty_cache()
 
     if use_torch_compile:
         if is_gemma:
