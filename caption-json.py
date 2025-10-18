@@ -183,6 +183,8 @@ print(f"Free memory for compute: {free_memory} GB")
 
 offload_cache = free_memory < 4
 if dtype == torch.float32:
+    batch_size = int((free_memory) / math.sqrt(model_param_size))
+elif not use_quantized_matmul:
     batch_size = int((free_memory * 2) / math.sqrt(model_param_size))
 else:
     batch_size = int((free_memory * 4) / math.sqrt(model_param_size))
