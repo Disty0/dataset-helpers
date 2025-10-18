@@ -57,6 +57,8 @@ cleanup_end_list.extend(cleanup_end_list)
 cleanup_end_list = tuple(cleanup_end_list)
 
 cleanup_caption_list = (
+    ["a detailed description of the anime image:\n", ""],
+    ["image description:\n", ""],
     [" Hatsune Maku, ", " Hatsune Miku, "],
     ["\"Vocaiol,\"", "\"Vocaloid,\""],
     ["Gensishn Impact", "Genshin Impact"],
@@ -365,11 +367,12 @@ if __name__ == "__main__":
     # gemma-3n-e4b-it
     # gemma-3-27b-it
     # qwen2.5-vl-7b-instruct
+    # qwen3-vl-8b-instruct
     # qwen3-vl-30b-a3b-instruct
     # internvl3_5-30b-a3b-hf
     # florence-2-base-promptgen-v1-5
     parser = argparse.ArgumentParser(description="Create tags from json")
     parser.add_argument("--out_path", default="", type=str)
-    parser.add_argument("--caption_key", default="gemma-3n-e4b-it", type=str)
+    parser.add_argument("--caption_key", default="qwen3-vl-8b-instruct", type=str)
     args = parser.parse_args()
     main(args.out_path, args.caption_key)

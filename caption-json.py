@@ -81,9 +81,9 @@ cache_base_prompt = False
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
-model_repo = "google/gemma-3n-E4B-it"
+#model_repo = "google/gemma-3n-E4B-it"
 #model_repo = "google/gemma-3-27b-it"
-#model_repo = "Qwen/Qwen2.5-VL-7B-Instruct"
+model_repo = "Qwen/Qwen3-VL-8B-Instruct"
 #model_repo = "Qwen/Qwen3-VL-30B-A3B-Instruct"
 #model_repo = "OpenGVLab/InternVL3_5-30B-A3B-HF"
 
@@ -143,14 +143,11 @@ else:
 model_param_size = round(model_param_size * 1.075, 2)
 print(f"Model parameter size: {model_param_size} B")
 
-quantize_weights = "int8" if is_gemma else None # prefer more batch size
-use_quantized_matmul = bool(device.type in {"cuda", "xpu"})
+quantize_weights = "int8" # prefer more batch size
 if quantize_weights is None and model_param_size * 2 < max_model_memory:
     quantize_weights = None
 elif model_param_size < max_model_memory:
     quantize_weights = "int8"
-#elif model_param_size / 1.14 < max_model_memory:
-#    quantize_weights = "int7" # int7 is slow
 elif model_param_size / 1.33 < max_model_memory:
     quantize_weights = "int6"
 elif model_param_size / 1.6 < max_model_memory:
@@ -160,6 +157,7 @@ elif model_param_size / 2 < max_model_memory:
 else:
     quantize_weights = "uint3"
 
+use_quantized_matmul = bool(device.type == "cuda" or (device.type == "xpu" and quantize_weights in {"int8", "int6"}))
 print(f"Using quantization type: {quantize_weights}")
 print(f"Use quantized MatMul: {use_quantized_matmul}")
 
@@ -184,20 +182,17 @@ free_memory = round(max(free_memory, 0), 2)
 print(f"Free memory for compute: {free_memory} GB")
 
 offload_cache = free_memory < 4
-if "qwen" not in model_repo_lower:
-    if dtype == torch.float32:
-        batch_size = int((free_memory * 2) / math.sqrt(model_param_size))
-    else:
-        batch_size = int((free_memory * 4) / math.sqrt(model_param_size))
-    if batch_size > 16:
-        batch_size -= batch_size % 8
-    if batch_size > 4:
-        batch_size -= batch_size % 4
-    else:
-        batch_size -= batch_size % 2
-    batch_size = max(batch_size, 1)
+if dtype == torch.float32:
+    batch_size = int((free_memory * 2) / math.sqrt(model_param_size))
 else:
-    batch_size = 1
+    batch_size = int((free_memory * 4) / math.sqrt(model_param_size))
+if batch_size > 16:
+    batch_size -= batch_size % 8
+if batch_size > 4:
+    batch_size -= batch_size % 4
+else:
+    batch_size -= batch_size % 2
+batch_size = max(batch_size, 1)
 print(f"Using batch size: {batch_size}")
 
 if os.path.exists(tag_dict_path):
@@ -624,7 +619,7 @@ class ImageBackend():
                         copyright_tags += " " + char_tag
                 if copyright_tags and copyright_tags[0] == " ":
                     copyright_tags = copyright_tags[1:]
-                inputs = self.processor(text=prompts, images=images, padding="longest", return_tensors="pt")
+                inputs = self.processor(text=prompts, images=images, padding="longest", return_tensors="pt", padding_side="left")
                 inputs["pixel_values"] = inputs["pixel_values"].to(dtype=dtype)
                 self.load_queue.put((inputs, batches, copyright_tags))
                 self.load_queue_lenght += 1
