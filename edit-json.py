@@ -12,9 +12,9 @@ key_to_remove_list = [
     #"gemma-3-4b-it",
     #"gemma-3-12b-it",
     #"gemma-3-27b-it",
-    #"qwen2.5-vl-7b-instruct",
     #"qwen3-vl-8b-instruct",
-    #"qwen3-vl-30b-a3b-instruct",
+    #"qwen3-vl-32b-instruct",
+    #"qwen3-vl-32b-instruct-sdnq-uint4-svd-r32",
     #"florence-2-base-promptgen-v1-5",
 ]
 

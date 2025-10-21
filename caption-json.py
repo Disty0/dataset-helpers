@@ -49,16 +49,6 @@ if torch.version.hip:
     except Exception as e:
         print(f"Failed to enable Flash Atten for ROCm: {e}")
 
-try:
-    if torch.xpu.is_available():
-        # https://github.com/Disty0/ipex_to_cuda
-        # in use for dynamic atten
-        from ipex_to_cuda import ipex_init
-        ipex_active, message = ipex_init()
-        print(f"IPEX Active: {ipex_active} Message: {message}")
-except ImportError:
-    pass
-
 from transformers import AutoModelForImageTextToText, AutoProcessor, LogitsProcessor, StaticCache, HybridCache
 from accelerate import infer_auto_device_map, dispatch_model
 from queue import Queue
@@ -81,11 +71,11 @@ cache_base_prompt = False
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
+model_repo = "Qwen/Qwen3-VL-8B-Instruct"
+#model_repo = "Qwen/Qwen3-VL-32B-Instruct"
+#model_repo = "Disty0/Qwen3-VL-32B-Instruct-SDNQ-uint4-svd-r32"
 #model_repo = "google/gemma-3n-E4B-it"
 #model_repo = "google/gemma-3-27b-it"
-model_repo = "Qwen/Qwen3-VL-8B-Instruct"
-#model_repo = "Qwen/Qwen3-VL-30B-A3B-Instruct"
-#model_repo = "OpenGVLab/InternVL3_5-30B-A3B-HF"
 
 tag_dict_path = os.path.join(os.path.dirname(__file__), "tag_dict.json")
 char_dict_path = os.path.join(os.path.dirname(__file__), "char_dict.json")
@@ -143,8 +133,13 @@ else:
 model_param_size = round(model_param_size * 1.075, 2)
 print(f"Model parameter size: {model_param_size} B")
 
+is_prequantized = False
 quantize_weights = "int8" # prefer more batch size
-if quantize_weights is None and model_param_size * 2 < max_model_memory:
+if "sdnq-" in model_repo_lower:
+    is_prequantized = True
+    quantize_weights = model_repo_lower.split("sdnq-", maxsplit=1)[-1].split("-", maxsplit=1)[0]
+    print("Using a prequantized model")
+elif quantize_weights is None and model_param_size * 2 < max_model_memory:
     quantize_weights = None
 elif model_param_size < max_model_memory:
     quantize_weights = "int8"
@@ -157,7 +152,7 @@ elif model_param_size / 2 < max_model_memory:
 else:
     quantize_weights = "uint3"
 
-use_quantized_matmul = bool(device.type == "cuda" or (device.type == "xpu" and quantize_weights in {"int8", "int6"}))
+use_quantized_matmul = device.type in {"xpu", "cuda"}
 print(f"Using quantization type: {quantize_weights}")
 print(f"Use quantized MatMul: {use_quantized_matmul}")
 
@@ -756,6 +751,10 @@ def main():
     ).eval()
     model.requires_grad_(False)
     model.generation_config.update(temperature=None, top_k=None, top_p=None)
+    if is_prequantized:
+        print(f"Applying SDNQ options: use_quantized_matmul={use_quantized_matmul}")
+        from sdnq.loader import apply_options_to_model
+        model = apply_options_to_model(model, use_quantized_matmul=use_quantized_matmul)
 
     print("Model size:", round(sum(p.numel() * p.element_size() for p in model.parameters()) / 1024 / 1024 / 1024, 2), "GB")
     model = dispatch_model(model, device_map=infer_auto_device_map(model, max_memory={device.index or 0: f"{max_model_memory}GB", "cpu": "4096GB"}))

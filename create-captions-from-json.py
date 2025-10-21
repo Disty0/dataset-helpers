@@ -366,10 +366,9 @@ if __name__ == "__main__":
     #caption_keys:
     # gemma-3n-e4b-it
     # gemma-3-27b-it
-    # qwen2.5-vl-7b-instruct
     # qwen3-vl-8b-instruct
-    # qwen3-vl-30b-a3b-instruct
-    # internvl3_5-30b-a3b-hf
+    # qwen3-vl-32b-instruct
+    # qwen3-vl-32b-instruct-sdnq-uint4-svd-r32
     # florence-2-base-promptgen-v1-5
     parser = argparse.ArgumentParser(description="Create tags from json")
     parser.add_argument("--out_path", default="", type=str)
