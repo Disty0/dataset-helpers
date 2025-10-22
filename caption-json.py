@@ -64,7 +64,7 @@ from PIL import Image # noqa: E402
 
 max_image_size = 1048576 # 1024x1024
 max_new_tokens = 1024
-max_input_tokens = 512
+max_input_tokens = 1024
 use_tunable_ops = False # Set to True for performance increase for AMD, uses quite a bit of VRAM when tuning
 use_torch_compile = False # torch.compile causes nonsense outputs
 cache_base_prompt = False
