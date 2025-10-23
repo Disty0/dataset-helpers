@@ -174,7 +174,7 @@ elif dtype == torch.float32:
 else:
     free_memory = (device_memory - min(max_model_memory, model_param_size * 2.00))
 
-free_memory = round(max(free_memory - 1, 0), 2)
+free_memory = round(max(free_memory, 0), 2)
 print(f"Free memory for compute: {free_memory} GB")
 
 offload_cache = free_memory < 4
@@ -886,10 +886,8 @@ def main():
             if is_omni:
                 # output_ids, audio = model_run(...)
                 output_ids = output_ids[0]
-            generated_ids = [
-                output_ids[len(input_ids) :]
-                for input_ids, output_ids in zip(inputs.input_ids, output_ids)
-            ]
+            output_ids = output_ids.to("cpu") # don't keep the save queue in GPU
+            generated_ids = [output_ids[len(input_ids) :] for input_ids, output_ids in zip(inputs.input_ids, output_ids)]
             save_backend.save(generated_ids, image_paths)
         except Exception as e:
             print(f"ERROR: {image_paths} MESSAGE: {e}")
