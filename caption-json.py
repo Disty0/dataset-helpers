@@ -679,6 +679,7 @@ class SaveCaptionBackend():
                     generated_text[i] = generated_text[i].replace("Caption the art style, anime style and the quality of this anime image as well.", "").replace("Caption the anime style, anime style and the quality of this anime image as well.", "").replace("Caption nudity, sex, sexual intercourse, sex", "").replace("Caption nudity, sex", "").replace("Caption this anime image in detail.", "").replace("Caption this anime image in", "").replace("Caption this anime image", "").replace("Caption this image.", "").replace("Caption this image", "").replace("Caption the image.", "")
                     generated_text[i] = generated_text[i].removeprefix("This anime image is ").removeprefix("This image is ").removeprefix("This is ")
                     self.save_to_file(generated_text[i], os.path.splitext(image_paths[i])[0]+".json")
+                del generated_ids, image_path, generated_text
             else:
                 time.sleep(0.25)
         print("Stopping the save backend threads")
@@ -889,6 +890,7 @@ def main():
             output_ids = output_ids.to("cpu") # don't keep the save queue in GPU
             generated_ids = [output_ids[len(input_ids) :] for input_ids, output_ids in zip(inputs.input_ids, output_ids)]
             save_backend.save(generated_ids, image_paths)
+            del inputs, output_ids
         except Exception as e:
             print(f"ERROR: {image_paths} MESSAGE: {e}")
             os.makedirs("errors", exist_ok=True)
@@ -896,7 +898,7 @@ def main():
             error_file.write(f"ERROR: {image_paths} MESSAGE: {e} \n")
             error_file.close()
         steps_after_gc = steps_after_gc + 1
-        if steps_after_gc == 0 or steps_after_gc >= 16:
+        if steps_after_gc == 0 or steps_after_gc >= 4:
             gc.collect()
             if device.type != "cpu":
                 getattr(torch, device.type).synchronize()
