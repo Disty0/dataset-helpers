@@ -174,7 +174,7 @@ elif dtype == torch.float32:
 else:
     free_memory = (device_memory - min(max_model_memory, model_param_size * 2.00))
 
-free_memory = round(max(free_memory, 0), 2)
+free_memory = round(max(free_memory - 1, 0), 2)
 print(f"Free memory for compute: {free_memory} GB")
 
 offload_cache = free_memory < 4
