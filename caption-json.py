@@ -130,7 +130,7 @@ if model_param_size.startswith("e"):
     model_param_size = int(model_param_size.replace("e","")) * 2
 else:
     model_param_size = int(model_param_size)
-model_param_size = round(model_param_size * 1.075, 2)
+model_param_size = round(model_param_size * 1.15, 2)
 print(f"Model parameter size: {model_param_size} B")
 
 is_prequantized = False
@@ -157,23 +157,24 @@ print(f"Using quantization type: {quantize_weights}")
 print(f"Use quantized MatMul: {use_quantized_matmul}")
 
 if quantize_weights == "uint3":
-    free_memory = (device_memory - min(max_model_memory, model_param_size / 2.66))
+    model_param_size = model_param_size * 1.25
+    free_memory = (device_memory - min(max_model_memory, model_param_size * 0.50))
 elif quantize_weights in {"int4", "uint4"}:
-    free_memory = (device_memory - min(max_model_memory, model_param_size / 2))
+    free_memory = (device_memory - min(max_model_memory, model_param_size * 0.57))
 elif quantize_weights == "int5":
-    free_memory = (device_memory - min(max_model_memory, model_param_size / 1.6))
+    free_memory = (device_memory - min(max_model_memory, model_param_size * 0.66))
 elif quantize_weights == "int6":
-    free_memory = (device_memory - min(max_model_memory, model_param_size / 1.33))
+    free_memory = (device_memory - min(max_model_memory, model_param_size * 0.75))
 elif quantize_weights == "int7":
-    free_memory = (device_memory - min(max_model_memory, model_param_size / 1.14))
+    free_memory = (device_memory - min(max_model_memory, model_param_size * 0.88))
 elif quantize_weights in {"int8", "sym_int8"}:
-    free_memory = (device_memory - min(max_model_memory, model_param_size))
+    free_memory = (device_memory - min(max_model_memory, model_param_size * 1.00))
 elif dtype == torch.float32:
-    free_memory = (device_memory - min(max_model_memory, model_param_size * 4))
+    free_memory = (device_memory - min(max_model_memory, model_param_size * 4.00))
 else:
-    free_memory = (device_memory - min(max_model_memory, model_param_size * 2))
+    free_memory = (device_memory - min(max_model_memory, model_param_size * 2.00))
 
-free_memory = round(max(free_memory, 0), 2)
+free_memory = round(max(free_memory - 1, 0), 2)
 print(f"Free memory for compute: {free_memory} GB")
 
 offload_cache = free_memory < 4
@@ -185,7 +186,7 @@ else:
     batch_size = int((free_memory * 4) / math.sqrt(model_param_size))
 if batch_size > 16:
     batch_size -= batch_size % 8
-if batch_size > 4:
+if batch_size > 8:
     batch_size -= batch_size % 4
 else:
     batch_size -= batch_size % 2
