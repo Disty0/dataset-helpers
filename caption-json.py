@@ -645,6 +645,9 @@ class ImageBackend():
                         prompt += booru_tag_prompt.format(booru_tags)
                     else:
                         prompt += "\n" + booru_tag_prompt.format(booru_tags)
+        else:
+            sys_prompt_to_use = system_prompt
+            prompt = base_prompt
         image = Image.open(image_path)
         width, height = image.size
         image_size = width * height
@@ -787,9 +790,12 @@ def main():
     for image_path in tqdm(file_list):
         try:
             json_path = os.path.splitext(image_path)[0]+".json"
-            with open(json_path, "r") as f:
-                json_data = json.load(f)
-            if not json_data.get(caption_key, ""):
+            if os.path.exists(json_path):
+                with open(json_path, "r") as f:
+                    json_data = json.load(f)
+                if not json_data.get(caption_key, ""):
+                    image_paths.append(image_path)
+            else:
                 image_paths.append(image_path)
         except Exception as e:
             print(f"ERROR: {json_path} MESSAGE: {e}")
