@@ -71,7 +71,8 @@ cache_base_prompt = False
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
-model_repo = "Qwen/Qwen3-VL-8B-Instruct"
+model_repo = "thesby/Qwen3-VL-8B-NSFW-Caption-V4"
+#model_repo = "Qwen/Qwen3-VL-8B-Instruct"
 #model_repo = "Qwen/Qwen3-VL-32B-Instruct"
 #model_repo = "Disty0/Qwen3-VL-32B-Instruct-SDNQ-uint4-svd-r32"
 #model_repo = "google/gemma-3n-E4B-it"
@@ -679,7 +680,7 @@ class SaveCaptionBackend():
                     generated_text[i] = generated_text[i].replace("Caption the art style, anime style and the quality of this anime image as well.", "").replace("Caption the anime style, anime style and the quality of this anime image as well.", "").replace("Caption nudity, sex, sexual intercourse, sex", "").replace("Caption nudity, sex", "").replace("Caption this anime image in detail.", "").replace("Caption this anime image in", "").replace("Caption this anime image", "").replace("Caption this image.", "").replace("Caption this image", "").replace("Caption the image.", "")
                     generated_text[i] = generated_text[i].removeprefix("This anime image is ").removeprefix("This image is ").removeprefix("This is ")
                     self.save_to_file(generated_text[i], os.path.splitext(image_paths[i])[0]+".json")
-                del generated_ids, image_path, generated_text
+                del generated_ids, image_paths, generated_text
             else:
                 time.sleep(0.25)
         print("Stopping the save backend threads")

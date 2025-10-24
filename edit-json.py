@@ -12,6 +12,7 @@ key_to_remove_list = [
     #"gemma-3-4b-it",
     #"gemma-3-12b-it",
     #"gemma-3-27b-it",
+    #"qwen3-vl-8b-nsfw-caption-v4",
     #"qwen3-vl-8b-instruct",
     #"qwen3-vl-32b-instruct",
     #"qwen3-vl-32b-instruct-sdnq-uint4-svd-r32",
