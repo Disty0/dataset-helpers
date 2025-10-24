@@ -690,9 +690,12 @@ class SaveCaptionBackend():
 
     def save_to_file(self, data: str, path: str) -> None:
         if data:
-            with open(path, "r") as f:
-                json_data = json.load(f)
-            json_data[caption_key] = data
+            if os.path.exists(path):
+                with open(path, "r") as f:
+                    json_data = json.load(f)
+                json_data[caption_key] = data
+            else:
+                json_data = {caption_key: data}
             with open(path, "w") as f:
                 json.dump(json_data, f)
 
