@@ -404,7 +404,7 @@ def get_tags_from_json(json_path: str, image_path: str, caption_key: str, dropou
                 tag_list.append(character_tag)
 
         general_tags_added = 0
-        general_tags_to_add_count = random.randint(0,8)
+        general_tags_to_add_count = random.randint(1,8)
         for general_tag in split_general_tags:
             if general_tags_added >= general_tags_to_add_count:
                 break
