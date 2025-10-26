@@ -12,7 +12,7 @@ from glob import glob
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
 
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
@@ -33,6 +33,9 @@ if os.path.exists(tag_categories_path):
 else:
     tag_categories = None
 
+copyright_blacklist = (
+    "original",
+)
 
 meta_blacklist = (
     "highres",
@@ -154,6 +157,8 @@ aes_score_to_tag = {
     0: "worst aesthetic",
 }
 
+def check_dropout(dropout: float) -> bool:
+    return bool(dropout == 0 or (dropout > 0 and random.randint(0,100) > dropout * 100))
 
 def get_aes_score(score: int, score_dict: Dict[int, int]) -> int:
     for i in reversed(range(6)):
@@ -221,7 +226,7 @@ def dedupe_tags(split_tags: List[str], no_shuffle: bool) -> List[str]:
         if tag and spaced_tag not in ordered_tag_string and tag not in deduped_tags:
             ordered_tag_string += spaced_tag
             deduped_tags.append(tag)
-    if no_shuffle:
+    if not no_shuffle:
         random.shuffle(deduped_tags)
     return deduped_tags
 
@@ -245,25 +250,33 @@ def dedupe_character_tags(split_tags: List[str], no_shuffle: bool) -> List[str]:
         pruned_tag in ordered_tag_string and pruned_tag_end in ordered_tag_string):
             ordered_tag_string += spaced_tag
             deduped_tags.append(tag)
-    if no_shuffle:
+    if not no_shuffle:
         random.shuffle(deduped_tags)
     return deduped_tags
 
 
-def get_tags_from_json(json_path: str, image_path: str, caption_key: str, no_shuffle: bool, general_only: bool) -> str:
+def get_tags_from_json(json_path: str, image_path: str, caption_key: str, dropout: Tuple[float], no_shuffle: bool, general_only: bool) -> str:
+    if isinstance(dropout, (float, int)):
+        dropout_aesthetic = dropout_quality = dropout_year = dropout_style = dropout_special = dropout_artist = dropout_medium = dropout_rating = dropout_no_shuffle = dropout_character = dropout_character = dropout_general = dropout_meta = dropout
+    else:
+        dropout_aesthetic, dropout_quality, dropout_year, dropout_style, dropout_special, dropout_artist, dropout_medium, dropout_rating, dropout_no_shuffle, dropout_character, dropout_character, dropout_general, dropout_meta = dropout
     with open(json_path, "r") as json_file:
         json_data = json.load(json_file)
+    tag_list = []
 
     split_general_tags = json_data["tag_string_general"].split(" ")
     split_artist_tags = json_data["tag_string_artist"].split(" ")
     split_copyright_tags = json_data["tag_string_copyright"].split(" ")
     split_character_tags = json_data["tag_string_character"].split(" ")
     split_meta_tags = json_data["tag_string_meta"].split(" ")
-    split_raw_meta_tags = json_data["tag_string_meta"].split(" ")
 
-    pixiv_tags = json_data.get("pixiv_tags", [])
-    if pixiv_tags:
-        for raw_pixiv_tag in pixiv_tags:
+    if json_data.get(f"{caption_key}_tag_string_general", ""):
+        for wd_tag in json_data[f"{caption_key}_tag_string_general"].split(" "):
+            if wd_tag and wd_tag not in no_shuffle_tags and wd_tag not in style_age_tags and wd_tag not in split_general_tags:
+                split_general_tags.append(wd_tag)
+
+    if json_data.get("pixiv_tags", []):
+        for raw_pixiv_tag in json_data["pixiv_tags"]:
             if raw_pixiv_tag and raw_pixiv_tag not in pixiv_tag_blacklist:
                 if raw_pixiv_tag.lower().endswith("+_bookmarks"):
                     raw_pixiv_tag = raw_pixiv_tag.rsplit("_", maxsplit=2)[0]
@@ -281,96 +294,98 @@ def get_tags_from_json(json_path: str, image_path: str, caption_key: str, no_shu
                         split_character_tags.append(pixiv_tag)
                     elif pixiv_tag_category == 5 and pixiv_tag not in split_meta_tags:
                         split_meta_tags.append(pixiv_tag)
-                        split_raw_meta_tags.append(pixiv_tag)
                 elif pixiv_tag.isascii():
                     split_general_tags.append(pixiv_tag)
 
-    if general_only:
-        line = ""
-    else:
-        line = get_aesthetic_tag(json_data)
-        line += f", {get_quality_tag(json_data, caption_key)}"
-        year_tag = str(json_data['created_at'][:4])
-        line += f", year {year_tag}"
+    if json_data.get("file_ext", "jpg") not in {"png", "jxl"} and (json_data.get("file_size", float("inf")) < 307200 or os.path.getsize(image_path) < 307200):
+        split_general_tags.append("compression_artifacts")
+
+    split_general_tags = dedupe_tags(split_general_tags, no_shuffle)
+    split_copyright_tags = dedupe_tags(split_copyright_tags, no_shuffle)
+    split_character_tags = dedupe_character_tags(split_character_tags, no_shuffle)
+    if not general_only:
+        split_meta_tags = dedupe_tags(split_meta_tags, no_shuffle)
+
+    if not general_only:
+        if check_dropout(dropout_aesthetic):
+            tag_list.append(get_aesthetic_tag(json_data))
+        if check_dropout(dropout_quality):
+            tag_list.append(get_quality_tag(json_data, caption_key))
+        if check_dropout(dropout_year):
+            tag_list.append(f"year {json_data['created_at'][:4]}")
 
     style_age_tag_added = False
     for style_age_tag in style_age_tags:
         if style_age_tag in split_general_tags:
             split_general_tags.pop(split_general_tags.index(style_age_tag))
-            if not general_only:
-                if not style_age_tag_added and int(style_age_tag[:3]) < int(json_data['created_at'][:3]):
-                    line += f", {style_age_tag[:4]}s (style)"
-                    style_age_tag_added = True
+            if not general_only and not style_age_tag_added and int(style_age_tag[:3]) < int(json_data['created_at'][:3]) and check_dropout(dropout_style):
+                tag_list.append(f"{style_age_tag[:4]}s (style)")
+                style_age_tag_added = True
     if not general_only and (
-        not style_age_tag_added and json_data.get("style_age", "") and (
+        not style_age_tag_added
+        and json_data.get("style_age", "")
+        and (
             int(json_data['style_age'][:3]) < int(json_data['created_at'][:3])
             or ((2015 <= int(json_data['created_at'][:4]) < 2020) and int(json_data['style_age'][:4]) < 2015)
         )
+        and check_dropout(dropout_style)
     ):
-        line += f", {json_data['style_age'][:4]}s (style)"
+        tag_list.append(f"{json_data['style_age'][:4]}s (style)")
 
     if json_data.get("special_tags", ""):
         for special_tag in json_data["special_tags"].split(" "):
-            if special_tag:
-                line += f", {special_tag.replace('_', ' ')}"
+            if special_tag and check_dropout(dropout_special):
+                tag_list.append(special_tag.replace('_', ' '))
 
     if not general_only:
         for artist in split_artist_tags:
-            if artist:
-                line += f", art by {artist.replace('_', ' ')}"
+            if artist and check_dropout(dropout_artist):
+                tag_list.append(f"art by {artist.replace('_', ' ')}")
 
-        if no_shuffle:
-            random.shuffle(split_meta_tags)
-        for medium_tag in split_raw_meta_tags:
-            if medium_tag.endswith("_(medium)") and medium_tag != "photoshop_(medium)":
-                split_meta_tags.pop(split_meta_tags.index(medium_tag))
-                line += f", {medium_tag.replace('_', ' ')}"
+        meta_keys_to_pop = []
+        for medium_tag in split_meta_tags:
+            if medium_tag.endswith("_(medium)"):
+                meta_keys_to_pop.append(medium_tag)
+                if medium_tag != "photoshop_(medium)" and check_dropout(dropout_medium):
+                    tag_list.append(medium_tag.replace('_', ' '))
+        for medium_tag in meta_keys_to_pop:
+            split_meta_tags.pop(split_meta_tags.index(medium_tag))
 
-        rating = json_data.get(f"{caption_key}_rating", json_data["rating"])
-        if rating == "g":
-            line += ", sfw rating"
-        elif rating == "s":
-            line += ", sensitive rating"
-        elif rating == "q":
-            line += ", nsfw rating"
-        elif rating == "e":
-            line += ", explicit nsfw rating"
+        if check_dropout(dropout_rating):
+            rating = json_data.get(f"{caption_key}_rating", json_data["rating"])
+            if rating == "g":
+                tag_list.append("sfw rating")
+            elif rating == "s":
+                tag_list.append("sensitive rating")
+            elif rating == "q":
+                tag_list.append("nsfw rating")
+            elif rating == "e":
+                tag_list.append("explicit nsfw rating")
 
     for no_shuffle_tag in no_shuffle_tags:
         if no_shuffle_tag in split_general_tags:
             split_general_tags.pop(split_general_tags.index(no_shuffle_tag))
-            line += f", {no_shuffle_tag.replace('_', ' ')}"
+            if check_dropout(dropout_no_shuffle):
+                tag_list.append(no_shuffle_tag.replace('_', ' '))
 
-    for char in dedupe_character_tags(split_character_tags, no_shuffle):
-        if char:
-            line += f", character {char.replace('_', ' ')}"
+    for character_tag in split_character_tags:
+        if character_tag and check_dropout(dropout_character):
+            tag_list.append(f"character {character_tag.replace('_', ' ')}")
 
-    if "original" in split_copyright_tags:
-        split_copyright_tags.pop(split_copyright_tags.index("original"))
-    for cpr in dedupe_tags(split_copyright_tags, no_shuffle):
-        if cpr:
-            line += f", from {cpr.replace('_', ' ')}"
+    for copyright_tag in split_copyright_tags:
+        if copyright_tag and copyright_tag not in copyright_blacklist and check_dropout(dropout_copyright):
+            tag_list.append(f"from {copyright_tag.replace('_', ' ')}")
 
-    if json_data.get(f"{caption_key}_tag_string_general", ""):
-        for wd_tag in json_data[f"{caption_key}_tag_string_general"].split(" "):
-            if wd_tag and wd_tag not in no_shuffle_tags and wd_tag not in style_age_tags and wd_tag not in split_general_tags:
-                split_general_tags.append(wd_tag)
-
-    if json_data.get("file_ext", "jpg") not in {"png", "jxl"} and (json_data.get("file_size", float("inf")) < 307200 or os.path.getsize(image_path) < 307200):
-        split_general_tags.append("compression_artifacts")
-
-    for tag in dedupe_tags(split_general_tags, no_shuffle):
-        if tag:
-            line += f", {tag.replace('_', ' ') if len(tag) > 3 else tag}"
+    for general_tag in split_general_tags:
+        if general_tag and check_dropout(dropout_general):
+            tag_list.append(general_tag.replace('_', ' ') if len(general_tag) > 3 else general_tag)
 
     if not general_only and split_meta_tags:
         for meta_tag in split_meta_tags:
-            if meta_tag and not any([bool(meta_tag_blacklist in meta_tag) for meta_tag_blacklist in meta_blacklist]):
-                line += f", {meta_tag.replace('_', ' ')}"
+            if meta_tag and not any([bool(meta_tag_blacklist in meta_tag) for meta_tag_blacklist in meta_blacklist]) and check_dropout(dropout_meta):
+                tag_list.append(meta_tag.replace('_', ' '))
 
-    if general_only:
-        line = line[2:]
-    return line
+    return ", ".join(tag_list)
 
 
 class SaveTagBackend():
@@ -404,7 +419,7 @@ class SaveTagBackend():
         caption_file.close()
 
 
-def main(out_path: str, caption_key: str, no_shuffle: bool, general_only: bool):
+def main(out_path: str, caption_key: str, dropout: Tuple[float], no_shuffle: bool, general_only: bool):
     steps_after_gc = 0
     print(f"Searching for {img_ext_list} files...")
     file_list = []
@@ -425,7 +440,7 @@ def main(out_path: str, caption_key: str, no_shuffle: bool, general_only: bool):
     for image_path in tqdm(file_list):
         json_path = os.path.splitext(image_path)[0]+".json"
         try:
-            tags = get_tags_from_json(json_path, image_path, caption_key, no_shuffle, general_only)
+            tags = get_tags_from_json(json_path, image_path, caption_key, dropout, no_shuffle, general_only)
             save_backend.save(tags, os.path.splitext(json_path)[0]+".txt")
         except Exception as e:
             os.makedirs("errors", exist_ok=True)
@@ -445,7 +460,39 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Create tags from json")
     parser.add_argument("--out_path", default="", type=str)
     parser.add_argument("--caption_key", default="wd", type=str)
+    parser.add_argument("--dropout", default=0, type=float)
+    parser.add_argument("--dropout_aesthetic", default=0, type=float)
+    parser.add_argument("--dropout_quality", default=0, type=float)
+    parser.add_argument("--dropout_year", default=0, type=float)
+    parser.add_argument("--dropout_style", default=0, type=float)
+    parser.add_argument("--dropout_special", default=0, type=float)
+    parser.add_argument("--dropout_artist", default=0, type=float)
+    parser.add_argument("--dropout_medium", default=0, type=float)
+    parser.add_argument("--dropout_rating", default=0, type=float)
+    parser.add_argument("--dropout_no_shuffle", default=0, type=float)
+    parser.add_argument("--dropout_character", default=0, type=float)
+    parser.add_argument("--dropout_copyright", default=0, type=float)
+    parser.add_argument("--dropout_general", default=0, type=float)
+    parser.add_argument("--dropout_meta", default=0, type=float)
     parser.add_argument("--no_shuffle", default=False, action="store_true")
     parser.add_argument("--general_only", default=False, action="store_true")
     args = parser.parse_args()
-    main(args.out_path, args.caption_key, args.no_shuffle, args.general_only)
+    if args.dropout > 0:
+        dropout = args.dropout
+    else:
+        dropout = (
+            args.dropout_aesthetic,
+            args.dropout_quality,
+            args.dropout_year,
+            args.dropout_style,
+            args.dropout_special,
+            args.dropout_artist,
+            args.dropout_medium,
+            args.dropout_rating,
+            args.dropout_no_shuffle,
+            args.dropout_character,
+            args.dropout_copyright,
+            args.dropout_general,
+            args.dropout_meta,
+        )
+    main(args.out_path, args.caption_key, dropout, args.no_shuffle, args.general_only)
