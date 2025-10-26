@@ -257,9 +257,9 @@ def dedupe_character_tags(split_tags: List[str], no_shuffle: bool) -> List[str]:
 
 def get_tags_from_json(json_path: str, image_path: str, caption_key: str, dropout: Tuple[float], no_shuffle: bool, general_only: bool) -> str:
     if isinstance(dropout, (float, int)):
-        dropout_aesthetic = dropout_quality = dropout_year = dropout_style = dropout_special = dropout_artist = dropout_medium = dropout_rating = dropout_no_shuffle = dropout_character = dropout_character = dropout_general = dropout_meta = dropout
+        dropout_aesthetic = dropout_quality = dropout_year = dropout_style = dropout_special = dropout_artist = dropout_medium = dropout_rating = dropout_no_shuffle = dropout_character = dropout_copyright = dropout_general = dropout_meta = dropout
     else:
-        dropout_aesthetic, dropout_quality, dropout_year, dropout_style, dropout_special, dropout_artist, dropout_medium, dropout_rating, dropout_no_shuffle, dropout_character, dropout_character, dropout_general, dropout_meta = dropout
+        dropout_aesthetic, dropout_quality, dropout_year, dropout_style, dropout_special, dropout_artist, dropout_medium, dropout_rating, dropout_no_shuffle, dropout_character, dropout_copyright, dropout_general, dropout_meta = dropout
     with open(json_path, "r") as json_file:
         json_data = json.load(json_file)
     tag_list = []
@@ -456,43 +456,39 @@ def main(out_path: str, caption_key: str, dropout: Tuple[float], no_shuffle: boo
     exit_handler(save_backend)
 
 if __name__ == "__main__":
-    #caption_keys: wd, pixiv
     parser = argparse.ArgumentParser(description="Create tags from json")
     parser.add_argument("--out_path", default="", type=str)
     parser.add_argument("--caption_key", default="wd", type=str)
     parser.add_argument("--dropout", default=0, type=float)
-    parser.add_argument("--dropout_aesthetic", default=0, type=float)
-    parser.add_argument("--dropout_quality", default=0, type=float)
-    parser.add_argument("--dropout_year", default=0, type=float)
-    parser.add_argument("--dropout_style", default=0, type=float)
-    parser.add_argument("--dropout_special", default=0, type=float)
-    parser.add_argument("--dropout_artist", default=0, type=float)
-    parser.add_argument("--dropout_medium", default=0, type=float)
-    parser.add_argument("--dropout_rating", default=0, type=float)
-    parser.add_argument("--dropout_no_shuffle", default=0, type=float)
-    parser.add_argument("--dropout_character", default=0, type=float)
-    parser.add_argument("--dropout_copyright", default=0, type=float)
-    parser.add_argument("--dropout_general", default=0, type=float)
-    parser.add_argument("--dropout_meta", default=0, type=float)
+    parser.add_argument("--dropout_aesthetic", default=None, type=float)
+    parser.add_argument("--dropout_quality", default=None, type=float)
+    parser.add_argument("--dropout_year", default=None, type=float)
+    parser.add_argument("--dropout_style", default=None, type=float)
+    parser.add_argument("--dropout_special", default=None, type=float)
+    parser.add_argument("--dropout_artist", default=None, type=float)
+    parser.add_argument("--dropout_medium", default=None, type=float)
+    parser.add_argument("--dropout_rating", default=None, type=float)
+    parser.add_argument("--dropout_no_shuffle", default=None, type=float)
+    parser.add_argument("--dropout_character", default=None, type=float)
+    parser.add_argument("--dropout_copyright", default=None, type=float)
+    parser.add_argument("--dropout_general", default=None, type=float)
+    parser.add_argument("--dropout_meta", default=None, type=float)
     parser.add_argument("--no_shuffle", default=False, action="store_true")
     parser.add_argument("--general_only", default=False, action="store_true")
     args = parser.parse_args()
-    if args.dropout > 0:
-        dropout = args.dropout
-    else:
-        dropout = (
-            args.dropout_aesthetic,
-            args.dropout_quality,
-            args.dropout_year,
-            args.dropout_style,
-            args.dropout_special,
-            args.dropout_artist,
-            args.dropout_medium,
-            args.dropout_rating,
-            args.dropout_no_shuffle,
-            args.dropout_character,
-            args.dropout_copyright,
-            args.dropout_general,
-            args.dropout_meta,
-        )
+    dropout = (
+        args.dropout_aesthetic if args.dropout_aesthetic is not None else args.dropout,
+        args.dropout_quality if args.dropout_quality is not None else args.dropout,
+        args.dropout_year if args.dropout_year is not None else args.dropout,
+        args.dropout_style if args.dropout_style is not None else args.dropout,
+        args.dropout_special if args.dropout_special is not None else args.dropout,
+        args.dropout_artist if args.dropout_artist is not None else args.dropout,
+        args.dropout_medium if args.dropout_medium is not None else args.dropout,
+        args.dropout_rating if args.dropout_rating is not None else args.dropout,
+        args.dropout_no_shuffle if args.dropout_no_shuffle is not None else args.dropout,
+        args.dropout_character if args.dropout_character is not None else args.dropout,
+        args.dropout_copyright if args.dropout_copyright is not None else args.dropout,
+        args.dropout_general if args.dropout_general is not None else args.dropout,
+        args.dropout_meta if args.dropout_meta is not None else args.dropout,
+    )
     main(args.out_path, args.caption_key, dropout, args.no_shuffle, args.general_only)
