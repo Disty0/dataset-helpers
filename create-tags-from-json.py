@@ -395,12 +395,22 @@ def get_tags_from_json(json_path: str, image_path: str, caption_key: str, dropou
             tag_list.append("nsfw rating")
         elif rating == "e":
             tag_list.append("explicit nsfw rating")
-        if len(split_artist_tags) > 0 and split_artist_tags[0]:
-            tag_list.append(split_artist_tags[0])
-        if len(split_character_tags) > 0 and split_character_tags[0]:
-            tag_list.append(split_character_tags[0])
-        if len(split_general_tags) > 0 and split_general_tags[0]:
-            tag_list.append(split_general_tags[0])
+
+        for artist_tag in split_artist_tags:
+            if artist_tag:
+                tag_list.append(artist_tag)
+        for character_tag in split_character_tags:
+            if character_tag:
+                tag_list.append(character_tag)
+
+        general_tags_added = 0
+        general_tags_to_add_count = random.randint(0,8)
+        for general_tag in split_general_tags:
+            if general_tags_added >= general_tags_to_add_count:
+                break
+            if general_tag:
+                tag_list.append(general_tag)
+                general_tags_added += 1
 
     return ", ".join(tag_list)
 
