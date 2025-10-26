@@ -385,6 +385,23 @@ def get_tags_from_json(json_path: str, image_path: str, caption_key: str, dropou
             if meta_tag and not any([bool(meta_tag_blacklist in meta_tag) for meta_tag_blacklist in meta_blacklist]) and check_dropout(dropout_meta):
                 tag_list.append(meta_tag.replace('_', ' '))
 
+    if len(tag_list) == 0:
+        rating = json_data.get(f"{caption_key}_rating", json_data["rating"])
+        if rating == "g":
+            tag_list.append("sfw rating")
+        elif rating == "s":
+            tag_list.append("sensitive rating")
+        elif rating == "q":
+            tag_list.append("nsfw rating")
+        elif rating == "e":
+            tag_list.append("explicit nsfw rating")
+        if len(split_artist_tags) > 0 and split_artist_tags[0]:
+            tag_list.append(split_artist_tags[0])
+        if len(split_character_tags) > 0 and split_character_tags[0]:
+            tag_list.append(split_character_tags[0])
+        if len(split_general_tags) > 0 and split_general_tags[0]:
+            tag_list.append(split_general_tags[0])
+
     return ", ".join(tag_list)
 
 
