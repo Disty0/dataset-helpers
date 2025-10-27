@@ -149,14 +149,14 @@ for id in tqdm(range(args.start, args.end)):
             and not any([bool(tag in image_data["tag_string_meta"]) for tag in meta_blacklist])
         ):
             try:
+                image = requests.get(image_data["file_url"], stream=True).raw
                 if image_ext == ".jxl" and image_data["file_ext"] in {"jpg", "jpeg"}:
                     jpg_path = os.path.join(folder, str(id)+".jpg")
-                    image_data = requests.get(image_data["file_url"], stream=True).raw.read()
                     with open(jpg_path, "wb") as jpg_file:
-                        jpg_file.write(image_data)
+                        jpg_file.write(image.read())
                     image = Image.open(jpg_path)
                 else:
-                    image = Image.open(requests.get(image_data["file_url"], stream=True).raw).convert("RGBA")
+                    image = Image.open(image).convert("RGBA")
                     if image_size > 4194304: # 2048x2048
                         scale = math.sqrt(image_size / 4194304)
                         new_width = int(width/scale)
@@ -170,7 +170,19 @@ for id in tqdm(range(args.start, args.end)):
                         new_width = int(width/scale)
                         new_height = int(height/scale)
                         image = image.convert("RGBA").resize((new_width, new_height), Image.NEAREST)
-                image.save(image_path, lossless=True, lossless_jpeg=True)
+                try:
+                    image.save(image_path, lossless=True, lossless_jpeg=True)
+                except Exception as e:
+                    if jpg_path is not None:
+                        image = image.convert("RGBA")
+                        if image_size > 4194304: # 2048x2048
+                            scale = math.sqrt(image_size / 4194304)
+                            new_width = int(width/scale)
+                            new_height = int(height/scale)
+                            image = image.resize((new_width, new_height), Image.LANCZOS)
+                        image.save(image_path, lossless=True, lossless_jpeg=False)
+                    else:
+                        raise e
                 image.close()
                 if jpg_path is not None and os.path.exists(jpg_path):
                     os.remove(jpg_path)
