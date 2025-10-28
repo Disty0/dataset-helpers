@@ -46,17 +46,6 @@ if torch.version.hip:
     except Exception as e:
         print(f"Failed to enable Flash Atten for ROCm: {e}")
 
-try:
-    import transformers # ipex hijacks transformers and makes it unable to load a model
-    backup_get_class_from_dynamic_module = transformers.dynamic_module_utils.get_class_from_dynamic_module
-    import intel_extension_for_pytorch as ipex
-    ipex_available = True
-    ipex.llm.utils._get_class_from_dynamic_module = backup_get_class_from_dynamic_module
-    transformers.dynamic_module_utils.get_class_from_dynamic_module = backup_get_class_from_dynamic_module
-except Exception:
-    ipex_available = False
-
-
 from queue import Queue
 from transformers import Florence2ForConditionalGeneration, AutoProcessor
 from concurrent.futures import ThreadPoolExecutor
@@ -509,11 +498,7 @@ def main():
     model.language_model.eval()
     model.language_model.requires_grad_(False)
 
-    if ipex_available:
-        model.vision_tower = ipex.llm.optimize(model.vision_tower, device=device, dtype=dtype, inplace=True)
-        model.multi_modal_projector = ipex.llm.optimize(model.multi_modal_projector, device=device, dtype=dtype, inplace=True)
-        model.language_model = ipex.llm.optimize(model.language_model, device=device, dtype=dtype, inplace=True)
-    elif use_torch_compile:
+    if use_torch_compile:
         model.vision_tower = torch.compile(model.vision_tower, backend="inductor")
         model.multi_modal_projector = torch.compile(model.multi_modal_projector, backend="inductor")
         model.language_model = torch.compile(model.language_model, backend="inductor")
