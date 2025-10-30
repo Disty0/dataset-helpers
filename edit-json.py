@@ -29,10 +29,10 @@ file_list = []
 for ext in img_ext_list:
     file_list.extend(glob(f"**/*.{ext}"))
 
-do_write = True
 progress_bar = tqdm(file_list)
 for image_path in file_list:
     try:
+        do_write = False
         base_name, file_ext = os.path.splitext(image_path)
         file_ext = file_ext[1:]
         json_path = base_name+".json"
