@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 
-key_to_remove_list = [
+key_to_remove_list = (
     #"gemma-3n-e4b-it",
     #"gemma-3-4b-it",
     #"gemma-3-12b-it",
@@ -17,7 +17,7 @@ key_to_remove_list = [
     #"qwen3-vl-32b-instruct",
     #"qwen3-vl-32b-instruct-sdnq-uint4-svd-r32",
     #"florence-2-base-promptgen-v1-5",
-]
+)
 
 total_cleanup = 0
 
