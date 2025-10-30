@@ -5,7 +5,6 @@ import os
 os.environ.setdefault("UR_L0_ENABLE_RELAXED_ALLOCATION_LIMITS", "1")
 
 import gc
-import copy
 import math
 import json
 import time
@@ -49,7 +48,7 @@ if torch.version.hip:
     except Exception as e:
         print(f"Failed to enable Flash Atten for ROCm: {e}")
 
-from transformers import AutoModelForImageTextToText, AutoProcessor, LogitsProcessor, StaticCache, HybridCache
+from transformers import AutoModelForImageTextToText, AutoProcessor
 from accelerate import infer_auto_device_map, dispatch_model
 from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
@@ -67,7 +66,6 @@ max_new_tokens = 1024
 max_input_tokens = 1024
 use_tunable_ops = False # Set to True for performance increase for AMD, uses quite a bit of VRAM when tuning
 use_torch_compile = False # torch.compile causes nonsense outputs
-cache_base_prompt = False
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
@@ -95,7 +93,6 @@ caption_key = model_repo_lower.rsplit("/", maxsplit=1)[-1].replace(".", "-")
 device = torch.device("xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
 dtype = torch.bfloat16 if device.type != "cpu" else torch.float32
 use_flash_atten = device.type == "cuda" and torch.version.cuda
-use_logits_processor = "qwen2" in model_repo_lower
 is_gemma = "gemma" in model_repo_lower
 is_omni = "omni" in model_repo_lower
 
@@ -213,6 +210,10 @@ else:
     tag_categories = None
 
 
+copyright_blacklist = (
+    "original",
+)
+
 meta_blacklist = (
     "highres",
     "source",
@@ -228,6 +229,7 @@ meta_blacklist = (
     "_account",
     "_mismatch",
     "_sample",
+    "_file",
     "check_",
     "has_",
     "metadata",
@@ -333,6 +335,10 @@ aes_score_to_tag = {
 }
 
 
+def check_dropout(dropout: float) -> bool:
+    return bool(dropout == 0 or (dropout > 0 and random.randint(0,100) > dropout * 100))
+
+
 def get_aes_score(score: int, score_dict: Dict[int, int]) -> int:
     for i in reversed(range(6)):
         if score > score_dict[i+1]:
@@ -374,11 +380,11 @@ def get_aesthetic_tag(json_data: Dict[str, int]) -> str:
     return aes_score_to_tag[aes_score]
 
 
-def get_quality_tag(json_data: Dict[str, int]) -> str:
+def get_quality_tag(json_data: Dict[str, int], caption_key: str) -> str:
     if json_data.get("fav_count", None) is not None or json_data.get("score", None) is not None:
         quality_score = get_aes_score(
             json_data.get("fav_count", json_data["score"]),
-            danbooru_quality_scores[json_data.get("wd_rating", json_data["rating"])]
+            danbooru_quality_scores[json_data.get(f"{caption_key}_rating", json_data["rating"])]
         )
         if int(json_data["id"]) > 7000000:
             wd_quality_score = get_aes_score(json_data.get("swinv2pv3_v0_448_ls0.2_x_percentile", 0), aes_deepghs_scores)
@@ -388,7 +394,7 @@ def get_quality_tag(json_data: Dict[str, int]) -> str:
     return quality_score_to_tag[quality_score]
 
 
-def dedupe_tags(split_tags: List[str]) -> List[str]:
+def dedupe_tags(split_tags: List[str], no_shuffle: bool) -> List[str]:
     if len(split_tags) <= 1:
         return split_tags
     split_tags.sort(key=len, reverse=True)
@@ -399,11 +405,12 @@ def dedupe_tags(split_tags: List[str]) -> List[str]:
         if tag and spaced_tag not in ordered_tag_string and tag not in deduped_tags:
             ordered_tag_string += spaced_tag
             deduped_tags.append(tag)
-    random.shuffle(deduped_tags)
+    if not no_shuffle:
+        random.shuffle(deduped_tags)
     return deduped_tags
 
 
-def dedupe_character_tags(split_tags: List[str]) -> List[str]:
+def dedupe_character_tags(split_tags: List[str], no_shuffle: bool) -> List[str]:
     if len(split_tags) <= 1:
         return split_tags
     split_tags.sort(key=len, reverse=True)
@@ -422,24 +429,34 @@ def dedupe_character_tags(split_tags: List[str]) -> List[str]:
         pruned_tag in ordered_tag_string and pruned_tag_end in ordered_tag_string):
             ordered_tag_string += spaced_tag
             deduped_tags.append(tag)
-    random.shuffle(deduped_tags)
+    if not no_shuffle:
+        random.shuffle(deduped_tags)
     return deduped_tags
 
 
-def get_tags_from_json(json_path: str, image_path: str) -> str:
+def get_tags_from_json(json_path: str, image_path: str, caption_key: str, dropout: Tuple[float], no_shuffle: bool, general_only: bool) -> Tuple[str, Dict[str, str]]:
+    if isinstance(dropout, (float, int)):
+        dropout_aesthetic = dropout_quality = dropout_year = dropout_style = dropout_special = dropout_artist = dropout_medium = dropout_rating = dropout_no_shuffle = dropout_character = dropout_copyright = dropout_general = dropout_meta = dropout
+    else:
+        dropout_aesthetic, dropout_quality, dropout_year, dropout_style, dropout_special, dropout_artist, dropout_medium, dropout_rating, dropout_no_shuffle, dropout_character, dropout_copyright, dropout_general, dropout_meta = dropout
     with open(json_path, "r") as json_file:
         json_data = json.load(json_file)
+    tag_list = []
+    character_features = {}
 
     split_general_tags = json_data["tag_string_general"].split(" ")
     split_artist_tags = json_data["tag_string_artist"].split(" ")
     split_copyright_tags = json_data["tag_string_copyright"].split(" ")
     split_character_tags = json_data["tag_string_character"].split(" ")
     split_meta_tags = json_data["tag_string_meta"].split(" ")
-    split_raw_meta_tags = json_data["tag_string_meta"].split(" ")
 
-    pixiv_tags = json_data.get("pixiv_tags", [])
-    if pixiv_tags:
-        for raw_pixiv_tag in pixiv_tags:
+    if json_data.get(f"{caption_key}_tag_string_general", ""):
+        for wd_tag in json_data[f"{caption_key}_tag_string_general"].split(" "):
+            if wd_tag and wd_tag not in no_shuffle_tags and wd_tag not in style_age_tags and wd_tag not in split_general_tags:
+                split_general_tags.append(wd_tag)
+
+    if json_data.get("pixiv_tags", []):
+        for raw_pixiv_tag in json_data["pixiv_tags"]:
             if raw_pixiv_tag and raw_pixiv_tag not in pixiv_tag_blacklist:
                 if raw_pixiv_tag.lower().endswith("+_bookmarks"):
                     raw_pixiv_tag = raw_pixiv_tag.rsplit("_", maxsplit=2)[0]
@@ -457,110 +474,146 @@ def get_tags_from_json(json_path: str, image_path: str) -> str:
                         split_character_tags.append(pixiv_tag)
                     elif pixiv_tag_category == 5 and pixiv_tag not in split_meta_tags:
                         split_meta_tags.append(pixiv_tag)
-                        split_raw_meta_tags.append(pixiv_tag)
                 elif pixiv_tag.isascii():
                     split_general_tags.append(pixiv_tag)
 
-    copyright_tags = ""
-    for char in split_character_tags:
-        if char:
-            copyright_tags += f" {char.replace('_', ' ')}"
-    for cpr in split_copyright_tags:
-        if cpr:
-            copyright_tags += f" {cpr.replace('_', ' ')}"
-    for artist in split_artist_tags:
-        if artist:
-            copyright_tags += f" {artist.replace('_', ' ')}"
-    if copyright_tags:
-        copyright_tags = copyright_tags[1:].lower()
+    if json_data.get("file_ext", "jpg") not in {"png", "jxl"} and (json_data.get("file_size", float("inf")) < 307200 or os.path.getsize(image_path) < 307200):
+        split_general_tags.append("compression_artifacts")
 
-    line = get_aesthetic_tag(json_data)
-    line += f", {get_quality_tag(json_data)}"
-    year_tag = str(json_data['created_at'][:4])
-    line += f", year {year_tag}"
+    split_general_tags = dedupe_tags(split_general_tags, no_shuffle)
+    split_copyright_tags = dedupe_tags(split_copyright_tags, no_shuffle)
+    split_character_tags = dedupe_character_tags(split_character_tags, no_shuffle)
+    if not general_only:
+        split_meta_tags = dedupe_tags(split_meta_tags, no_shuffle)
+
+    if not general_only:
+        if check_dropout(dropout_aesthetic):
+            tag_list.append(get_aesthetic_tag(json_data))
+        if check_dropout(dropout_quality):
+            tag_list.append(get_quality_tag(json_data, caption_key))
+        if check_dropout(dropout_year):
+            tag_list.append(f"year {json_data['created_at'][:4]}")
 
     style_age_tag_added = False
     for style_age_tag in style_age_tags:
         if style_age_tag in split_general_tags:
             split_general_tags.pop(split_general_tags.index(style_age_tag))
-            if not style_age_tag_added and int(style_age_tag[:3]) < int(json_data['created_at'][:3]):
-                line += f", {style_age_tag[:4]}s (style)"
+            if not general_only and not style_age_tag_added and int(style_age_tag[:3]) < int(json_data['created_at'][:3]) and check_dropout(dropout_style):
+                tag_list.append(f"{style_age_tag[:4]}s (style)")
                 style_age_tag_added = True
-    if (not style_age_tag_added and json_data.get("style_age", "")
+    if not general_only and (
+        not style_age_tag_added
+        and json_data.get("style_age", "")
         and (
             int(json_data['style_age'][:3]) < int(json_data['created_at'][:3])
             or ((2015 <= int(json_data['created_at'][:4]) < 2020) and int(json_data['style_age'][:4]) < 2015)
         )
+        and check_dropout(dropout_style)
     ):
-        line += f", {json_data['style_age'][:4]}s (style)"
+        tag_list.append(f"{json_data['style_age'][:4]}s (style)")
 
     if json_data.get("special_tags", ""):
         for special_tag in json_data["special_tags"].split(" "):
-            if special_tag:
-                line += f", {special_tag.replace('_', ' ')}"
+            if special_tag and check_dropout(dropout_special):
+                tag_list.append(special_tag.replace('_', ' '))
 
-    for artist in split_artist_tags:
-        if artist:
-            line += f", art by {artist.replace('_', ' ')}"
-            line += f", artist name {artist.replace('_', ' ')}"
+    if not general_only:
+        for artist in split_artist_tags:
+            if artist and check_dropout(dropout_artist):
+                tag_list.append(f"art by {artist.replace('_', ' ')}")
 
-    random.shuffle(split_meta_tags)
-    for medium_tag in split_raw_meta_tags:
-        if medium_tag.endswith("_(medium)") and medium_tag != "photoshop_(medium)":
+        meta_keys_to_pop = []
+        for medium_tag in split_meta_tags:
+            if medium_tag.endswith("_(medium)"):
+                meta_keys_to_pop.append(medium_tag)
+                if medium_tag != "photoshop_(medium)" and check_dropout(dropout_medium):
+                    tag_list.append(medium_tag.replace('_', ' '))
+        for medium_tag in meta_keys_to_pop:
             split_meta_tags.pop(split_meta_tags.index(medium_tag))
-            line += f", {medium_tag.replace('_', ' ')}"
 
-    rating = json_data["rating"]
-    if rating == "g":
-        line += ", sfw rating"
-    elif rating == "s":
-        line += ", sensitive rating"
-    elif rating == "q":
-        line += ", nsfw rating"
-    elif rating == "e":
-        line += ", explicit nsfw rating"
+        if check_dropout(dropout_rating):
+            rating = json_data.get(f"{caption_key}_rating", json_data["rating"])
+            if rating == "g":
+                tag_list.append("sfw rating")
+            elif rating == "s":
+                tag_list.append("sensitive rating")
+            elif rating == "q":
+                tag_list.append("nsfw rating")
+            elif rating == "e":
+                tag_list.append("explicit nsfw rating")
 
     for no_shuffle_tag in no_shuffle_tags:
         if no_shuffle_tag in split_general_tags:
             split_general_tags.pop(split_general_tags.index(no_shuffle_tag))
-            line += f", {no_shuffle_tag.replace('_', ' ')}"
+            if check_dropout(dropout_no_shuffle):
+                tag_list.append(no_shuffle_tag.replace('_', ' '))
 
-    character_features = {}
-    for char in dedupe_character_tags(split_character_tags):
-        if char:
-            if char_dict is not None and char_dict.get(char, None):
-                feature_tags_list = dedupe_tags(char_dict[char])
-                if len(feature_tags_list) > 0:
-                    feature_tags = ""
-                    for tag in feature_tags_list:
-                        feature_tags += f", {tag.replace('_', ' ') if len(tag) > 3 else tag}"
-                    character_features[char.replace('_', ' ')] = feature_tags[2:]
-            line += f", character {char.replace('_', ' ')}"
+    for character_tag in split_character_tags:
+        if character_tag and check_dropout(dropout_character):
+            char_feature_dict = char_dict.get(character_tag, None) if char_dict is not None else None
+            if char_feature_dict is not None:
+                for general_tag in char_feature_dict["tags"]:
+                    if general_tag in split_general_tags:
+                        split_general_tags.pop(split_general_tags.index(general_tag))
+                char_feature_tags = []
+                character_copyrigt_tag = character_tag.rsplit("(", maxsplit=1)[-1].removesuffix(")")
+                for copyright_tag in char_feature_dict["copyright"]:
+                    if copyright_tag not in character_copyrigt_tag:
+                        char_feature_tags.append(f"from {copyright_tag.replace('_', ' ')}")
+                for general_tag in dedupe_tags(char_feature_dict["tags"], no_shuffle):
+                    char_feature_tags.append(general_tag.replace('_', ' ') if len(general_tag) > 3 else general_tag)
+                character_features[character_tag.replace('_', ' ')] = ", ".join(char_feature_tags)
+            else:
+                tag_list.append(f"character {character_tag.replace('_', ' ')}")
 
-    if "original" in split_copyright_tags:
-        split_copyright_tags.pop(split_copyright_tags.index("original"))
-    for cpr in dedupe_tags(split_copyright_tags):
-        if cpr:
-            line += f", from {cpr.replace('_', ' ')}"
 
-    if json_data.get("wd_tag_string_general", ""):
-        for wd_tag in json_data["wd_tag_string_general"].split(" "):
-            if wd_tag and wd_tag not in no_shuffle_tags and wd_tag not in style_age_tags and wd_tag not in split_general_tags:
-                split_general_tags.append(wd_tag)
+    for copyright_tag in split_copyright_tags:
+        if copyright_tag and copyright_tag not in copyright_blacklist and check_dropout(dropout_copyright):
+            add_copyright_tag = True
+            for character_tag in split_character_tags:
+                if copyright_tag in character_tag.rsplit("(", maxsplit=1)[-1].removesuffix(")") or f"from {copyright_tag.replace('_', ' ')}" in character_features.get(character_tag.replace('_', ' '), ""):
+                    add_copyright_tag = False
+                    break
+            if add_copyright_tag:
+                tag_list.append(f"from {copyright_tag.replace('_', ' ')}")
 
-    if json_data.get("file_ext", "jpg") not in {"png", "jxl"} and (json_data.get("file_size", float("inf")) < 307200 or os.path.getsize(image_path) < 307200):
-        split_general_tags.append("compression_artifacts")
+    for general_tag in split_general_tags:
+        if general_tag and check_dropout(dropout_general):
+            tag_list.append(general_tag.replace('_', ' ') if len(general_tag) > 3 else general_tag)
 
-    for tag in dedupe_tags(split_general_tags):
-        if tag:
-            line += f", {tag.replace('_', ' ') if len(tag) > 3 else tag}"
-
-    if split_meta_tags:
+    if not general_only and split_meta_tags:
         for meta_tag in split_meta_tags:
-            if meta_tag and not any([bool(meta_tag_blacklist in meta_tag) for meta_tag_blacklist in meta_blacklist]):
-                line += f", {meta_tag.replace('_', ' ')}"
+            if meta_tag and not any([bool(meta_tag_blacklist in meta_tag) for meta_tag_blacklist in meta_blacklist]) and check_dropout(dropout_meta):
+                tag_list.append(meta_tag.replace('_', ' '))
 
-    return line, copyright_tags, character_features
+    if len(tag_list) == 0:
+        rating = json_data.get(f"{caption_key}_rating", json_data["rating"])
+        if rating == "g":
+            tag_list.append("sfw rating")
+        elif rating == "s":
+            tag_list.append("sensitive rating")
+        elif rating == "q":
+            tag_list.append("nsfw rating")
+        elif rating == "e":
+            tag_list.append("explicit nsfw rating")
+
+        for artist_tag in split_artist_tags:
+            if artist_tag:
+                tag_list.append(artist_tag)
+        for character_tag in split_character_tags:
+            if character_tag:
+                tag_list.append(character_tag)
+
+        general_tags_added = 0
+        general_tags_to_add_count = random.randint(1,8)
+        for general_tag in split_general_tags:
+            if general_tags_added >= general_tags_to_add_count:
+                break
+            if general_tag:
+                tag_list.append(general_tag)
+                general_tags_added += 1
+
+    return ", ".join(tag_list), character_features
 
 
 class ImageBackend():
@@ -593,9 +646,8 @@ class ImageBackend():
                 batches = self.batches.get()
                 images = []
                 prompts = []
-                copyright_tags = ""
                 for batch in batches:
-                    image, prompt, sys_prompt_to_use, char_tag = self.load_from_file(batch)
+                    image, prompt, sys_prompt_to_use = self.load_from_file(batch)
                     images.append([image]) # has to be a list of lists for batch size > 1
                     prompt = self.processor.decode(self.processor(text=prompt, images=None, add_special_tokens=False, truncation=True, max_length=max_input_tokens)["input_ids"][0])
                     conversation = [
@@ -614,23 +666,18 @@ class ImageBackend():
                         }
                     ]
                     prompts.append(self.processor.apply_chat_template(conversation, add_generation_prompt=True))
-                    if char_tag:
-                        copyright_tags += " " + char_tag
-                if copyright_tags and copyright_tags[0] == " ":
-                    copyright_tags = copyright_tags[1:]
                 inputs = self.processor(text=prompts, images=images, padding="longest", return_tensors="pt", padding_side="left")
                 inputs["pixel_values"] = inputs["pixel_values"].to(dtype=dtype)
-                self.load_queue.put((inputs, batches, copyright_tags))
+                self.load_queue.put((inputs, batches))
                 self.load_queue_lenght += 1
             else:
                 time.sleep(5)
         print("Stopping the image loader threads")
 
     def load_from_file(self, image_path: str) -> Tuple[Image.Image, str, str]:
-        copyright_tags = ""
         json_path = os.path.splitext(image_path)[0]+".json"
         if os.path.exists(json_path):
-            booru_tags, copyright_tags, character_features = get_tags_from_json(json_path, image_path)    
+            booru_tags, character_features = get_tags_from_json(json_path, image_path, "wd", 0, False, False)
             if booru_tags:
                 if "no humans" in booru_tags:
                     sys_prompt_to_use = booru_no_humans_system_prompt
@@ -658,7 +705,7 @@ class ImageBackend():
             image = image.resize((new_width, new_height), Image.BICUBIC)
         background = Image.new("RGBA", image.size, (255, 255, 255))
         image = Image.alpha_composite(background, image.convert("RGBA")).convert("RGB")
-        return (image, prompt, sys_prompt_to_use, copyright_tags)
+        return image, prompt, sys_prompt_to_use
 
 
 class SaveCaptionBackend():
@@ -700,37 +747,9 @@ class SaveCaptionBackend():
                 json.dump(json_data, f)
 
 
-# qwen2 stops generating when it writes a coptyright name
-# blackist the end and the image pad tokens when the generation lenght is too short or the last word is a copyright
-class UncensorQwen2(LogitsProcessor):
-    def __call__(self, input_ids: torch.Tensor, scores: torch.Tensor) -> torch.Tensor:
-        global input_ids_len, copyright_tags, processor
-        generation_lenght = input_ids.shape[-1] - input_ids_len
-        if generation_lenght < 64:
-            for i in range(scores.shape[0]):
-                scores[i][151645] = 0
-                scores[i][151655] = 0
-                if scores[i][0].isnan():
-                    raise RuntimeError("NaN found in the generation")
-        else:
-            for i in range(scores.shape[0]):
-                max_id = torch.argmax(scores)
-                if (copyright_tags and (max_id == 151645 or max_id == 151655) and generation_lenght < 384
-                and processor.decode(input_ids[i][-25:]).lower().rsplit("\n", maxsplit=1)[-1].rsplit(" ", maxsplit=1)[-1].replace("\"", "").replace(",", "") in copyright_tags):
-                        scores[i][151645] = 0
-                        scores[i][151655] = 0
-                elif max_id == 151655:
-                    # stop if the next token is the image pad
-                    # qwen2 spams this token until it hits the max token limit
-                    scores[i][151645] = scores[0][151655]
-                    scores[i][151655] = 0
-        return scores
-
-
 @torch.inference_mode()
 def main():
     steps_after_gc = -1
-    global input_ids_len, copyright_tags, processor
 
     torch.set_float32_matmul_precision("high")
     torch.backends.cuda.matmul.allow_tf32 = True
@@ -751,15 +770,13 @@ def main():
         quantization_config = None
 
     processor = AutoProcessor.from_pretrained(model_repo, use_fast=True)
-    if use_logits_processor:
-        model_kwargs["logits_processor"] = [UncensorQwen2()]
-
     model = model_cls.from_pretrained(
         model_repo, dtype=dtype, device_map="cpu", quantization_config=quantization_config,
         attn_implementation="flash_attention_2" if use_flash_atten else "sdpa",
     ).eval()
     model.requires_grad_(False)
     model.generation_config.update(temperature=None, top_k=None, top_p=None)
+
     if is_prequantized:
         print(f"Applying SDNQ options: use_quantized_matmul={use_quantized_matmul}")
         from sdnq.loader import apply_options_to_model
@@ -782,7 +799,6 @@ def main():
             model.visual = torch.compile(model.visual, backend="inductor")
             model.lm_head = torch.compile(model.lm_head, backend="inductor")
             model.model = torch.compile(model.model, backend="inductor")
-
 
     print(f"Searching for {img_ext_list} files...")
     file_list = []
@@ -835,63 +851,13 @@ def main():
         getattr(torch, device.type).synchronize()
         getattr(torch, device.type).empty_cache()
 
-    if cache_base_prompt:
-        conversation = [
-            {
-                "role": "system",
-                "content": [
-                    {"type": "text", "text": system_prompt}
-                ],
-            },
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": base_prompt},
-                ],
-            }
-        ]
-
-        text_input = processor.apply_chat_template(conversation, add_generation_prompt=False)
-        if is_gemma:
-            text_input = text_input.removesuffix("<end_of_turn>\n")
-            prompt_cache = HybridCache(config=model.language_model.config, max_batch_size=batch_size, max_cache_len=max_new_tokens, device=device, dtype=dtype)
-        else:
-            text_input = text_input.removesuffix("<|im_end|>\n")
-            prompt_cache = StaticCache(config=model.model.config, max_batch_size=batch_size, max_cache_len=max_new_tokens, device=device, dtype=dtype)
-
-        print("Caching base prompts...")
-        inputs = processor(text=[text_input] * batch_size, images=None, padding="longest", return_tensors="pt").to(device)
-        prompt_cache = model(**inputs, use_cache=True, past_key_values=prompt_cache).past_key_values
-
-        if offload_cache:
-            for i in range(len(prompt_cache.key_cache)):
-                prompt_cache.key_cache[i] = prompt_cache.key_cache[i].to("cpu")
-                prompt_cache.value_cache[i] = prompt_cache.value_cache[i].to("cpu")
-
-        gc.collect()
-        if device.type != "cpu":
-            getattr(torch, device.type).synchronize()
-            getattr(torch, device.type).empty_cache()
-
-        model.generation_config.update(cache_implementation=None)
-        model_kwargs["cache_implementation"] = None
-
     print("Starting to caption...")
     for _ in tqdm(range(epoch_len)):
         try:
             if use_torch_compile:
                 torch.compiler.cudagraph_mark_step_begin()
-            inputs, image_paths, copyright_tags = image_backend.get_images()
+            inputs, image_paths = image_backend.get_images()
             inputs = inputs.to(device)
-            input_ids_len = inputs["input_ids"].shape[-1]
-
-            if cache_base_prompt:
-                past_key_values = copy.deepcopy(prompt_cache)
-                if offload_cache:
-                    for i in range(len(past_key_values.key_cache)):
-                        past_key_values.key_cache[i] = past_key_values.key_cache[i].to(device)
-                        past_key_values.value_cache[i] = past_key_values.value_cache[i].to(device)
-                model_kwargs["past_key_values"] = past_key_values
 
             output_ids = model.generate(**inputs, **model_kwargs)
             if is_omni:

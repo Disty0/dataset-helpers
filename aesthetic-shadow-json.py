@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from typing import Optional
+
 import os
 import gc
 import json

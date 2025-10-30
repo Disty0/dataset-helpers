@@ -17,6 +17,7 @@ from typing import Dict, List, Tuple
 
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 tag_dict_path = os.path.join(os.path.dirname(__file__), "tag_dict.json")
+char_dict_path = os.path.join(os.path.dirname(__file__), "char_dict.json")
 tag_categories_path = os.path.join(os.path.dirname(__file__), "tag_categories.json")
 
 
@@ -26,6 +27,11 @@ if os.path.exists(tag_dict_path):
 else:
     tag_dict = None
 
+if os.path.exists(char_dict_path):
+    with open(char_dict_path, "r") as f:
+        char_dict = json.load(f)
+else:
+    char_dict = None
 
 if os.path.exists(tag_categories_path):
     with open(tag_categories_path, "r") as f:
@@ -157,8 +163,10 @@ aes_score_to_tag = {
     0: "worst aesthetic",
 }
 
+
 def check_dropout(dropout: float) -> bool:
     return bool(dropout == 0 or (dropout > 0 and random.randint(0,100) > dropout * 100))
+
 
 def get_aes_score(score: int, score_dict: Dict[int, int]) -> int:
     for i in reversed(range(6)):
@@ -371,10 +379,21 @@ def get_tags_from_json(json_path: str, image_path: str, caption_key: str, dropou
     for character_tag in split_character_tags:
         if character_tag and check_dropout(dropout_character):
             tag_list.append(f"character {character_tag.replace('_', ' ')}")
+            char_feature_dict = char_dict.get(character_tag, None) if char_dict is not None else None
+            if char_feature_dict is not None:
+                for general_tag in char_feature_dict["tags"]:
+                    if general_tag in split_general_tags:
+                        split_general_tags.pop(split_general_tags.index(general_tag))
 
     for copyright_tag in split_copyright_tags:
         if copyright_tag and copyright_tag not in copyright_blacklist and check_dropout(dropout_copyright):
-            tag_list.append(f"from {copyright_tag.replace('_', ' ')}")
+            add_copyright_tag = True
+            for character_tag in split_character_tags:
+                if copyright_tag in character_tag.rsplit("(", maxsplit=1)[-1].removesuffix(")"):
+                    add_copyright_tag = False
+                    break
+            if add_copyright_tag:
+                tag_list.append(f"from {copyright_tag.replace('_', ' ')}")
 
     for general_tag in split_general_tags:
         if general_tag and check_dropout(dropout_general):
