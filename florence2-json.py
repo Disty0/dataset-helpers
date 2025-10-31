@@ -480,7 +480,7 @@ class ImageBackend():
         if os.path.exists(json_path):
             try:
                 booru_tags = get_tags_from_json(json_path, image_path, "wd", 0, False, False)
-            except Exception as e:
+            except Exception:
                 booru_tags = ""
             if booru_tags:
                 prompt += " These are the tags for the anime image, you can use them for guidence: " + booru_tags
