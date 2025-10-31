@@ -565,8 +565,7 @@ def get_tags_from_json(json_path: str, image_path: str, caption_key: str, dropou
                     char_feature_tags.append(general_tag.replace('_', ' ') if len(general_tag) > 3 else general_tag)
                 character_features[character_tag.replace('_', ' ')] = ", ".join(char_feature_tags)
             else:
-                tag_list.append(f"character {character_tag.replace('_', ' ')}")
-
+                character_features[character_tag.replace('_', ' ')] = "features are unknown, try to guess from the general tags instead"
 
     for copyright_tag in split_copyright_tags:
         if copyright_tag and copyright_tag not in copyright_blacklist and check_dropout(dropout_copyright):

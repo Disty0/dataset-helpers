@@ -377,9 +377,11 @@ def get_tags_from_json(json_path: str, image_path: str, caption_key: str, dropou
             if check_dropout(dropout_no_shuffle):
                 tag_list.append(no_shuffle_tag.replace('_', ' '))
 
+    character_tags_added = []
     for character_tag in split_character_tags:
         if character_tag and check_dropout(dropout_character):
             tag_list.append(f"character {character_tag.replace('_', ' ')}")
+            character_tags_added.append(character_tag)
             char_feature_dict = char_dict.get(character_tag, None) if char_dict is not None else None
             if char_feature_dict is not None:
                 for general_tag in char_feature_dict["tags"]:
@@ -389,7 +391,7 @@ def get_tags_from_json(json_path: str, image_path: str, caption_key: str, dropou
     for copyright_tag in split_copyright_tags:
         if copyright_tag and copyright_tag not in copyright_blacklist and check_dropout(dropout_copyright):
             add_copyright_tag = True
-            for character_tag in split_character_tags:
+            for character_tag in character_tags_added:
                 if copyright_tag in character_tag.rsplit("(", maxsplit=1)[-1].removesuffix(")"):
                     add_copyright_tag = False
                     break
