@@ -420,7 +420,7 @@ def get_tags_from_json(json_path: str, image_path: str, caption_key: str, dropou
             if general_tags_added >= general_tags_to_add_count:
                 break
             if general_tag:
-                tag_list.append(general_tag)
+                tag_list.append(general_tag.replace('_', ' ') if len(general_tag) > 3 else general_tag)
                 general_tags_added += 1
 
     return ", ".join(tag_list)
