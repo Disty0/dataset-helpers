@@ -75,22 +75,9 @@ img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 
-if not use_flash_atten:
-    try:
-        import transformers
-        from transformers.dynamic_module_utils import get_imports
-        def fixed_get_imports(filename: str | os.PathLike) -> list[str]:
-            if not str(filename).endswith("modeling_florence2.py"):
-                return get_imports(filename)
-            imports = get_imports(filename)
-            try:
-                imports.remove("flash_attn")
-            except Exception:
-                pass
-            return imports
-        transformers.dynamic_module_utils.get_imports = fixed_get_imports
-    except Exception:
-        pass
+copyright_blacklist = (
+    "original",
+)
 
 
 meta_blacklist = (
@@ -202,6 +189,10 @@ aes_score_to_tag = {
 }
 
 
+def check_dropout(dropout: float) -> bool:
+    return bool(dropout == 0 or (dropout > 0 and random.randint(0,100) > dropout * 100))
+
+
 def get_aes_score(score: int, score_dict: Dict[int, int]) -> int:
     for i in reversed(range(6)):
         if score > score_dict[i+1]:
@@ -243,11 +234,11 @@ def get_aesthetic_tag(json_data: Dict[str, int]) -> str:
     return aes_score_to_tag[aes_score]
 
 
-def get_quality_tag(json_data: Dict[str, int]) -> str:
+def get_quality_tag(json_data: Dict[str, int], caption_key: str) -> str:
     if json_data.get("fav_count", None) is not None or json_data.get("score", None) is not None:
         quality_score = get_aes_score(
             json_data.get("fav_count", json_data["score"]),
-            danbooru_quality_scores[json_data.get("wd_rating", json_data["rating"])]
+            danbooru_quality_scores[json_data.get(f"{caption_key}_rating", json_data["rating"])]
         )
         if int(json_data["id"]) > 7000000:
             wd_quality_score = get_aes_score(json_data.get("swinv2pv3_v0_448_ls0.2_x_percentile", 0), aes_deepghs_scores)
@@ -257,7 +248,7 @@ def get_quality_tag(json_data: Dict[str, int]) -> str:
     return quality_score_to_tag[quality_score]
 
 
-def dedupe_tags(split_tags: List[str]) -> List[str]:
+def dedupe_tags(split_tags: List[str], no_shuffle: bool) -> List[str]:
     if len(split_tags) <= 1:
         return split_tags
     split_tags.sort(key=len, reverse=True)
@@ -268,11 +259,12 @@ def dedupe_tags(split_tags: List[str]) -> List[str]:
         if tag and spaced_tag not in ordered_tag_string and tag not in deduped_tags:
             ordered_tag_string += spaced_tag
             deduped_tags.append(tag)
-    random.shuffle(deduped_tags)
+    if not no_shuffle:
+        random.shuffle(deduped_tags)
     return deduped_tags
 
 
-def dedupe_character_tags(split_tags: List[str]) -> List[str]:
+def dedupe_character_tags(split_tags: List[str], no_shuffle: bool) -> List[str]:
     if len(split_tags) <= 1:
         return split_tags
     split_tags.sort(key=len, reverse=True)
@@ -291,95 +283,147 @@ def dedupe_character_tags(split_tags: List[str]) -> List[str]:
         pruned_tag in ordered_tag_string and pruned_tag_end in ordered_tag_string):
             ordered_tag_string += spaced_tag
             deduped_tags.append(tag)
-    random.shuffle(deduped_tags)
+    if not no_shuffle:
+        random.shuffle(deduped_tags)
     return deduped_tags
 
 
-def get_tags_from_json(json_path: str, image_path: str) -> str:
+def get_tags_from_json(json_path: str, image_path: str, caption_key: str, dropout: Tuple[float], no_shuffle: bool, general_only: bool) -> str:
+    if isinstance(dropout, (float, int)):
+        dropout_aesthetic = dropout_quality = dropout_year = dropout_style = dropout_special = dropout_artist = dropout_medium = dropout_rating = dropout_no_shuffle = dropout_character = dropout_copyright = dropout_general = dropout_meta = dropout
+    else:
+        dropout_aesthetic, dropout_quality, dropout_year, dropout_style, dropout_special, dropout_artist, dropout_medium, dropout_rating, dropout_no_shuffle, dropout_character, dropout_copyright, dropout_general, dropout_meta = dropout
     with open(json_path, "r") as json_file:
         json_data = json.load(json_file)
+    tag_list = []
 
-    line = get_aesthetic_tag(json_data)
-    line += f", {get_quality_tag(json_data)}"
-    year_tag = str(json_data['created_at'][:4])
-    line += f", year {year_tag}"
-
-    style_age_tag_added = False
     split_general_tags = json_data["tag_string_general"].split(" ")
-    for style_age_tag in style_age_tags:
-        if style_age_tag in split_general_tags:
-            split_general_tags.pop(split_general_tags.index(style_age_tag))
-            if not style_age_tag_added and int(style_age_tag[:3]) < int(json_data['created_at'][:3]):
-                line += f", {style_age_tag[:4]}s (style)"
-                style_age_tag_added = True
-    if (not style_age_tag_added and json_data.get("style_age", "")
-        and (
-            int(json_data['style_age'][:3]) < int(json_data['created_at'][:3])
-            or ((2015 <= int(json_data['created_at'][:4]) < 2020) and int(json_data['style_age'][:4]) < 2015)
-        )
-    ):
-        line += f", {json_data['style_age'][:4]}s (style)"
-
-    if json_data.get("special_tags", ""):
-        for special_tag in json_data["special_tags"].split(" "):
-            if special_tag:
-                line += f", {special_tag.replace('_', ' ')}"
-
-    for artist in json_data["tag_string_artist"].split(" "):
-        if artist:
-            line += f", art by {artist.replace('_', ' ')}"
-
-    split_meta_tags = json_data["tag_string_meta"].split(" ")
-    random.shuffle(split_meta_tags)
-    for medium_tag in json_data["tag_string_meta"].split(" "):
-        if medium_tag.endswith("_(medium)") and medium_tag != "photoshop_(medium)":
-            split_meta_tags.pop(split_meta_tags.index(medium_tag))
-            line += f", {medium_tag.replace('_', ' ')}"
-
-    rating = json_data.get("wd_rating", json_data["rating"])
-    if rating == "g":
-        line += ", sfw rating"
-    elif rating == "s":
-        line += ", sensitive rating"
-    elif rating == "q":
-        line += ", nsfw rating"
-    elif rating == "e":
-        line += ", explicit nsfw rating"
-
-    for no_shuffle_tag in no_shuffle_tags:
-        if no_shuffle_tag in split_general_tags:
-            split_general_tags.pop(split_general_tags.index(no_shuffle_tag))
-            line += f", {no_shuffle_tag.replace('_', ' ')}"
-
-    for char in dedupe_character_tags(json_data["tag_string_character"].split(" ")):
-        if char:
-            line += f", character {char.replace('_', ' ')}"
-
+    split_artist_tags = json_data["tag_string_artist"].split(" ")
     split_copyright_tags = json_data["tag_string_copyright"].split(" ")
-    if "original" in split_copyright_tags:
-        split_copyright_tags.pop(split_copyright_tags.index("original"))
-    for cpr in dedupe_tags(split_copyright_tags):
-        if cpr:
-            line += f", from {cpr.replace('_', ' ')}"
+    split_character_tags = json_data["tag_string_character"].split(" ")
+    split_meta_tags = json_data["tag_string_meta"].split(" ")
 
-    if json_data.get("wd_tag_string_general", ""):
-        for wd_tag in json_data["wd_tag_string_general"].split(" "):
+    if json_data.get(f"{caption_key}_tag_string_general", ""):
+        for wd_tag in json_data[f"{caption_key}_tag_string_general"].split(" "):
             if wd_tag and wd_tag not in no_shuffle_tags and wd_tag not in style_age_tags and wd_tag not in split_general_tags:
                 split_general_tags.append(wd_tag)
 
     if json_data.get("file_ext", "jpg") not in {"png", "jxl"} and (json_data.get("file_size", float("inf")) < 307200 or os.path.getsize(image_path) < 307200):
         split_general_tags.append("compression_artifacts")
 
-    for tag in dedupe_tags(split_general_tags):
-        if tag:
-            line += f", {tag.replace('_', ' ') if len(tag) > 3 else tag}"
+    split_general_tags = dedupe_tags(split_general_tags, no_shuffle)
+    split_copyright_tags = dedupe_tags(split_copyright_tags, no_shuffle)
+    split_character_tags = dedupe_character_tags(split_character_tags, no_shuffle)
+    if not general_only:
+        split_meta_tags = dedupe_tags(split_meta_tags, no_shuffle)
 
-    if split_meta_tags:
+    if not general_only:
+        if check_dropout(dropout_aesthetic):
+            tag_list.append(get_aesthetic_tag(json_data))
+        if check_dropout(dropout_quality):
+            tag_list.append(get_quality_tag(json_data, caption_key))
+        if check_dropout(dropout_year):
+            tag_list.append(f"year {json_data['created_at'][:4]}")
+
+    style_age_tag_added = False
+    for style_age_tag in style_age_tags:
+        if style_age_tag in split_general_tags:
+            split_general_tags.pop(split_general_tags.index(style_age_tag))
+            if not general_only and not style_age_tag_added and int(style_age_tag[:3]) < int(json_data['created_at'][:3]) and check_dropout(dropout_style):
+                tag_list.append(f"{style_age_tag[:4]}s (style)")
+                style_age_tag_added = True
+    if not general_only and (
+        not style_age_tag_added
+        and json_data.get("style_age", "")
+        and (
+            int(json_data['style_age'][:3]) < int(json_data['created_at'][:3])
+            or ((2015 <= int(json_data['created_at'][:4]) < 2020) and int(json_data['style_age'][:4]) < 2015)
+        )
+        and check_dropout(dropout_style)
+    ):
+        tag_list.append(f"{json_data['style_age'][:4]}s (style)")
+
+    if json_data.get("special_tags", ""):
+        for special_tag in json_data["special_tags"].split(" "):
+            if special_tag and check_dropout(dropout_special):
+                tag_list.append(special_tag.replace('_', ' '))
+
+    if not general_only:
+        for artist in split_artist_tags:
+            if artist and check_dropout(dropout_artist):
+                tag_list.append(f"art by {artist.replace('_', ' ')}")
+
+        meta_keys_to_pop = []
+        for medium_tag in split_meta_tags:
+            if medium_tag.endswith("_(medium)"):
+                meta_keys_to_pop.append(medium_tag)
+                if medium_tag != "photoshop_(medium)" and check_dropout(dropout_medium):
+                    tag_list.append(medium_tag.replace('_', ' '))
+        for medium_tag in meta_keys_to_pop:
+            split_meta_tags.pop(split_meta_tags.index(medium_tag))
+
+        if check_dropout(dropout_rating):
+            rating = json_data.get(f"{caption_key}_rating", json_data["rating"])
+            if rating == "g":
+                tag_list.append("sfw rating")
+            elif rating == "s":
+                tag_list.append("sensitive rating")
+            elif rating == "q":
+                tag_list.append("nsfw rating")
+            elif rating == "e":
+                tag_list.append("explicit nsfw rating")
+
+    for no_shuffle_tag in no_shuffle_tags:
+        if no_shuffle_tag in split_general_tags:
+            split_general_tags.pop(split_general_tags.index(no_shuffle_tag))
+            if check_dropout(dropout_no_shuffle):
+                tag_list.append(no_shuffle_tag.replace('_', ' '))
+
+    for character_tag in split_character_tags:
+        if character_tag and check_dropout(dropout_character):
+            tag_list.append(f"character {character_tag.replace('_', ' ')}")
+
+    for copyright_tag in split_copyright_tags:
+        if copyright_tag and copyright_tag not in copyright_blacklist and check_dropout(dropout_copyright):
+            tag_list.append(f"from {copyright_tag.replace('_', ' ')}")
+
+    for general_tag in split_general_tags:
+        if general_tag and check_dropout(dropout_general):
+            tag_list.append(general_tag.replace('_', ' ') if len(general_tag) > 3 else general_tag)
+
+    if not general_only and split_meta_tags:
         for meta_tag in split_meta_tags:
-            if meta_tag and not any([bool(meta_tag_blacklist in meta_tag) for meta_tag_blacklist in meta_blacklist]):
-                line += f", {meta_tag.replace('_', ' ')}"
+            if meta_tag and not any([bool(meta_tag_blacklist in meta_tag) for meta_tag_blacklist in meta_blacklist]) and check_dropout(dropout_meta):
+                tag_list.append(meta_tag.replace('_', ' '))
 
-    return line
+    if len(tag_list) == 0:
+        rating = json_data.get(f"{caption_key}_rating", json_data["rating"])
+        if rating == "g":
+            tag_list.append("sfw rating")
+        elif rating == "s":
+            tag_list.append("sensitive rating")
+        elif rating == "q":
+            tag_list.append("nsfw rating")
+        elif rating == "e":
+            tag_list.append("explicit nsfw rating")
+
+        for artist_tag in split_artist_tags:
+            if artist_tag:
+                tag_list.append(artist_tag)
+        for character_tag in split_character_tags:
+            if character_tag:
+                tag_list.append(character_tag)
+
+        general_tags_added = 0
+        general_tags_to_add_count = random.randint(1,8)
+        for general_tag in split_general_tags:
+            if general_tags_added >= general_tags_to_add_count:
+                break
+            if general_tag:
+                tag_list.append(general_tag)
+                general_tags_added += 1
+
+    return ", ".join(tag_list)
 
 
 class ImageBackend():
@@ -434,7 +478,10 @@ class ImageBackend():
 
         json_path = os.path.splitext(image_path)[0]+".json"
         if os.path.exists(json_path):
-            booru_tags = get_tags_from_json(json_path, image_path)
+            try:
+                booru_tags = get_tags_from_json(json_path, image_path, "wd", 0, False, False)
+            except Exception as e:
+                booru_tags = ""
             if booru_tags:
                 prompt += " These are the tags for the anime image, you can use them for guidence: " + booru_tags
         image = Image.open(image_path).convert("RGBA")
@@ -562,7 +609,8 @@ def main():
 
     for _ in tqdm(range(epoch_len)):
         try:
-            torch.compiler.cudagraph_mark_step_begin()
+            if use_torch_compile:
+                torch.compiler.cudagraph_mark_step_begin()
             inputs, image_paths = image_backend.get_images()
             inputs = inputs.to(dtype=dtype).to(device)
             generated_ids = model.generate(

@@ -214,6 +214,7 @@ copyright_blacklist = (
     "original",
 )
 
+
 meta_blacklist = (
     "highres",
     "source",

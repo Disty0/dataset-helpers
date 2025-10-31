@@ -13,6 +13,7 @@ def get_json_data(session, id):
     if raw_data.get("redirect", None) is not None:
         return raw_data
     json_data = raw_data.pop("post")
+    json_data["source"] = "anime-pictures"
     json_data["image_width"] = json_data.pop("width")
     json_data["image_height"] = json_data.pop("height")
     json_data["file_size"] = json_data.pop("size")

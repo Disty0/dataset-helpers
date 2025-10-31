@@ -144,6 +144,30 @@ class SaveTagBackend():
         if os.path.exists(json_path):
             with open(json_path, "r") as json_file:
                 json_data = json.load(json_file)
+
+            if json_data.get("rating", None) is None:
+                json_data["rating"] = rating
+            if json_data.get("tag_string_character", None) is None:
+                json_data["tag_string_character"] = character_strings
+            if json_data.get("tag_string_general", None) is None:
+                json_data["tag_string_general"] = sorted_general_strings
+
+            if json_data.get("tag_string_copyright", None) is None:
+                json_data["tag_string_copyright"] = ""
+            if json_data.get("tag_string_artist", None) is None:
+                json_data["tag_string_artist"] = ""
+            if json_data.get("tag_string_meta", None) is None:
+                json_data["tag_string_meta"] = ""
+
+            if json_data.get("created_at", None) is None:
+                json_data["created_at"] = "none"
+            if json_data.get("source", None) is None:
+                json_data["source"] = "wd-json.py"
+
+            if json_data.get("file_ext", None) is None:
+                json_data["file_ext"] = file_ext
+            if json_data.get("file_size", None) is None:
+                json_data["file_size"] = os.path.getsize(image_path)
         else:
             json_data = {}
             json_data["rating"] = rating
