@@ -15,8 +15,9 @@ client = pybooru.Danbooru("shima")
 
 if image_ext == ".jxl":
     import pillow_jxl # noqa: F401
-from PIL import Image # noqa: E402
+from PIL import Image, PngImagePlugin # noqa: E402
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
+PngImagePlugin.MAX_TEXT_CHUNK = 999999999 # 1024 * 1024
 
 parser = argparse.ArgumentParser(description="Get images from danbooru")
 parser.add_argument("start", type=int)
