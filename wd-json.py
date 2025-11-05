@@ -72,13 +72,23 @@ class ImageBackend():
                 time.sleep(0.25)
             elif not self.batches.empty():
                 batches = self.batches.get()
+                new_batches = []
                 images = []
                 for batch in batches:
-                    image = self.load_from_file(batch)
-                    images.append(image)
-                images = np.array(images)
-                self.load_queue.put((images, batches))
-                self.load_queue_lenght += 1
+                    try:
+                        image = self.load_from_file(batch)
+                        images.append(image)
+                        new_batches.append(batch)
+                    except Exception as e:
+                        print(f"ERROR: {batch} MESSAGE: {e}")
+                        os.makedirs("errors", exist_ok=True)
+                        error_file = open("errors/errors_images.txt", "a")
+                        error_file.write(f"ERROR: {batch} MESSAGE: {e} \n")
+                        error_file.close()
+                if len(images) > 0 and len(new_batches) > 0:
+                    images = np.array(images)
+                    self.load_queue.put((images, new_batches))
+                    self.load_queue_lenght += 1
             else:
                 time.sleep(5)
         print("Stopping the image loader threads")

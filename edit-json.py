@@ -17,6 +17,9 @@ key_to_remove_list = (
     #"qwen3-vl-32b-instruct",
     #"qwen3-vl-32b-instruct-sdnq-uint4-svd-r32",
     #"florence-2-base-promptgen-v1-5",
+    #"wd_rating",
+    #"wd_tag_string_character",
+    #"wd_tag_string_general",
 )
 
 total_cleanup = 0

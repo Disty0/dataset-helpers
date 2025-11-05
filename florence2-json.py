@@ -70,7 +70,7 @@ model_repo = "Disty0/Florence-2-base-PromptGen-v1.5"
 caption_key = model_repo.lower().rsplit("/", maxsplit=1)[-1].replace(".", "-")
 device = torch.device("cuda" if torch.cuda.is_available() else "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cpu")
 dtype = torch.float16 if device.type == "cuda" else torch.bfloat16 if device.type == "xpu" else torch.float32
-use_flash_atten = device.type == "cuda"
+use_flash_atten = device.type == "cuda" and torch.version.cuda is not None
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
