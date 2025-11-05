@@ -374,7 +374,9 @@ def get_aesthetic_tag(json_data: Dict[str, int]) -> str:
     if json_data.get("waifu-scorer-v3", None) is not None:
         scores.append(json_data["waifu-scorer-v3"])
         score_dicts.append(aes_euge_scores)
-    if len(scores) == 1:
+    if len(scores) == 0:
+        return None
+    elif len(scores) == 1:
         print(f"Using only 1 AES score! ID: {json_data.get('id', 'none')}")
         aes_score = get_aes_score(scores[0], score_dicts[0])
     else:
@@ -391,8 +393,10 @@ def get_quality_tag(json_data: Dict[str, int], caption_key: str) -> str:
         if int(json_data["id"]) > 7000000:
             wd_quality_score = get_aes_score(json_data.get("swinv2pv3_v0_448_ls0.2_x_percentile", 0), aes_deepghs_scores)
             quality_score = max(quality_score, wd_quality_score)
-    else:
+    elif json_data.get("swinv2pv3_v0_448_ls0.2_x_percentile", None) is not None:
         quality_score = get_aes_score(json_data["swinv2pv3_v0_448_ls0.2_x_percentile"], aes_deepghs_scores)
+    else:
+        return None
     return quality_score_to_tag[quality_score]
 
 
@@ -490,11 +494,13 @@ def get_tags_from_json(json_path: str, image_path: str, caption_key: str, dropou
         split_meta_tags = dedupe_tags(split_meta_tags, no_shuffle)
 
     if not general_only:
-        if check_dropout(dropout_aesthetic):
-            tag_list.append(get_aesthetic_tag(json_data))
-        if check_dropout(dropout_quality):
-            tag_list.append(get_quality_tag(json_data, caption_key))
-        if check_dropout(dropout_year):
+        aesthetic_tag = get_aesthetic_tag(json_data)
+        quality_tag = get_quality_tag(json_data, caption_key)
+        if aesthetic_tag is not None and check_dropout(dropout_aesthetic):
+            tag_list.append(aesthetic_tag)
+        if quality_tag is not None and check_dropout(dropout_quality):
+            tag_list.append(quality_tag)
+        if json_data.get("created_at", "none") != "none" and check_dropout(dropout_year):
             tag_list.append(f"year {json_data['created_at'][:4]}")
 
     style_age_tag_added = False
