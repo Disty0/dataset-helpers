@@ -41,6 +41,7 @@ for image_path in tqdm(file_list):
                     image = image.resize((new_width, new_height), Image.LANCZOS)
                     resized_jxl_file.write(image_path+"\n")
             image.save(jxl_path, lossless=True, lossless_jpeg=True)
+            image.close()
             if remove_files:
                 os.remove(image_path)
     except Exception as e:

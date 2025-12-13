@@ -113,9 +113,9 @@ class ImageBackend():
         print("Stopping the image loader threads")
 
     def load_from_file(self, image_path: str) -> Image.Image:
-        image = Image.open(image_path).convert("RGBA")
-        background = Image.new("RGBA", image.size, (255, 255, 255))
-        image = Image.alpha_composite(background, image).convert("RGB")
+        with Image.open(image_path) as img:
+            background = Image.new("RGBA", img.size, (255, 255, 255))
+            image = Image.alpha_composite(background, img.convert("RGBA")).convert("RGB")
         return image
 
 

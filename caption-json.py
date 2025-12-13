@@ -700,7 +700,9 @@ class ImageBackend():
                     prompt = prompt + "\n" + char + ": " + tags
             if booru_tags:
                 prompt = prompt + "\n" + booru_tag_prompt.format(booru_tags)
-        image = Image.open(image_path)
+        with Image.open(image_path) as img:
+            background = Image.new("RGBA", img.size, (255, 255, 255))
+            image = Image.alpha_composite(background, img.convert("RGBA")).convert("RGB")
         width, height = image.size
         image_size = width * height
         if image_size > max_image_size:
@@ -708,8 +710,6 @@ class ImageBackend():
             new_width = int(width/scale)
             new_height = int(height/scale)
             image = image.resize((new_width, new_height), Image.BICUBIC)
-        background = Image.new("RGBA", image.size, (255, 255, 255))
-        image = Image.alpha_composite(background, image.convert("RGBA")).convert("RGB")
         return image, prompt, sys_prompt_to_use
 
 

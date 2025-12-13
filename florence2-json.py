@@ -491,9 +491,9 @@ class ImageBackend():
             if booru_tags:
                 prompt += " These are the tags for the anime image, you can use them for guidence: " + booru_tags
 
-        image = Image.open(image_path).convert("RGBA")
-        background = Image.new("RGBA", image.size, (255, 255, 255))
-        image = Image.alpha_composite(background, image).convert("RGB")
+        with Image.open(image_path) as img:
+            background = Image.new("RGBA", img.size, (255, 255, 255))
+            image = Image.alpha_composite(background, img.convert("RGBA")).convert("RGB")
         return (image, prompt)
 
 

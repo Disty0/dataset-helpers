@@ -94,11 +94,10 @@ class ImageBackend():
         print("Stopping the image loader threads")
 
     def load_from_file(self, image_path: str) -> np.ndarray:
-        image = Image.open(image_path).convert("RGBA")
-        image_size = image.size
-
-        background = Image.new("RGBA", image_size, (255, 255, 255))
-        image = Image.alpha_composite(background, image).convert("RGB")
+        with Image.open(image_path) as img:
+            image_size = img.size
+            background = Image.new("RGBA", image_size, (255, 255, 255))
+            image = Image.alpha_composite(background, img.convert("RGBA")).convert("RGB")
 
         if image_size != self.model_target_size:
             if self.channels_first:

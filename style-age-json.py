@@ -67,9 +67,9 @@ class ImageBackend():
         print("Stopping the image loader threads")
 
     def load_from_file(self, image_path: str) -> np.ndarray:
-        image = Image.open(image_path).convert("RGBA")
-        background = Image.new("RGBA", image.size, (255, 255, 255))
-        image = Image.alpha_composite(background, image).convert("RGB")
+        with Image.open(image_path) as img:
+            background = Image.new("RGBA", img.size, (255, 255, 255))
+            image = Image.alpha_composite(background, img.convert("RGBA")).convert("RGB")
         image = image.resize((384, 384), Image.BICUBIC)
         image_array = np.asarray(image)
         image_array = np.transpose(image_array, (2, 0, 1))
