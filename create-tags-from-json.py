@@ -426,10 +426,10 @@ def get_tags_from_json(json_path: str, image_path: str, caption_key: str, dropou
 
         for artist_tag in split_artist_tags:
             if artist_tag:
-                tag_list.append(artist_tag)
+                tag_list.append(f"art by {artist.replace('_', ' ')}")
         for character_tag in split_character_tags:
             if character_tag:
-                tag_list.append(character_tag)
+                tag_list.append(f"character {character_tag.replace('_', ' ')}")
 
         general_tags_added = 0
         general_tags_to_add_count = random.randint(1,8)
