@@ -32,6 +32,7 @@ for image_path in tqdm(file_list):
         if not (os.path.exists(jxl_path) and os.path.getsize(jxl_path) != 0):
             image = Image.open(image_path)
             if resize_files and file_ext not in {"jpg", "jpeg"}: # jpeg to lossless jpeg xl has smaller file sizes than resizing down
+                image = image.convert("RGBA")
                 width, height = image.size
                 image_size = width * height
                 if image_size > 4194304:
@@ -40,6 +41,8 @@ for image_path in tqdm(file_list):
                     new_height = int(height/scale)
                     image = image.resize((new_width, new_height), Image.LANCZOS)
                     resized_jxl_file.write(image_path+"\n")
+            elif file_ext not in {"jpg", "jpeg"}:
+                image = image.convert("RGBA")
             image.save(jxl_path, lossless=True, lossless_jpeg=True)
             image.close()
             if remove_files:
