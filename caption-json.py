@@ -714,7 +714,7 @@ class ImageBackend():
 
 
 class SaveCaptionBackend():
-    def __init__(self, processor: AutoProcessor, max_save_workers: int = 2):
+    def __init__(self, processor: AutoProcessor, max_save_workers: int = 1):
         self.processor = processor
         self.keep_saving = True
         self.save_queue = Queue()
@@ -755,13 +755,6 @@ class SaveCaptionBackend():
 @torch.inference_mode()
 def main():
     steps_after_gc = -1
-
-    torch.backends.fp32_precision = "tf32"
-    torch.backends.cuda.matmul.fp32_precision = "tf32"
-    torch.backends.cudnn.fp32_precision = "tf32"
-    torch.backends.cudnn.conv.fp32_precision = "tf32"
-    torch.backends.cudnn.rnn.fp32_precision = "tf32"
-
     torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
     torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction = True
     torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(True)
