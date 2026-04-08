@@ -76,6 +76,7 @@ model_repo = "Disty0/Qwen3-VL-8B-NSFW-Caption-V4.5"
 #model_repo = "google/gemma-4-E2B-it"
 #model_repo = "google/gemma-4-E4B-it"
 #model_repo = "google/gemma-4-31B-it"
+#model_repo = "google/gemma-4-26B-A4B-it"
 
 tag_dict_path = os.path.join(os.path.dirname(__file__), "tag_dict.json")
 char_dict_path = os.path.join(os.path.dirname(__file__), "char_dict.json")
@@ -196,7 +197,7 @@ if batch_size > 8:
     batch_size -= batch_size % 4
 else:
     batch_size -= batch_size % 2
-batch_size = max(4, 1)
+batch_size = max(batch_size, 1)
 print(f"Using batch size: {batch_size}")
 
 if os.path.exists(tag_dict_path):
