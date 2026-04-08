@@ -197,6 +197,7 @@ if batch_size > 8:
     batch_size -= batch_size % 4
 else:
     batch_size -= batch_size % 2
+batch_size = min(batch_size, math.ceil(device_memory))
 batch_size = max(batch_size, 1)
 print(f"Using batch size: {batch_size}")
 
