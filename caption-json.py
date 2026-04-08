@@ -805,9 +805,9 @@ def main():
 
     if use_torch_compile:
         if is_gemma:
-            model.vision_tower = torch.compile(model.vision_tower, backend="inductor")
-            model.multi_modal_projector = torch.compile(model.multi_modal_projector, backend="inductor")
-            model.language_model = torch.compile(model.language_model, backend="inductor")
+            model.model.embed_vision = torch.compile(model.model.embed_vision, backend="inductor")
+            model.model.vision_tower = torch.compile(model.model.vision_tower, backend="inductor")
+            model.model.model = torch.compile(model.model, backend="inductor")
         else:
             model.visual = torch.compile(model.visual, backend="inductor")
             model.lm_head = torch.compile(model.lm_head, backend="inductor")
