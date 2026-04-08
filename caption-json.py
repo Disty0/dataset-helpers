@@ -73,6 +73,7 @@ model_repo = "Disty0/Qwen3-VL-8B-NSFW-Caption-V4.5"
 #model_repo = "Qwen/Qwen3-VL-8B-Instruct"
 #model_repo = "Qwen/Qwen3-VL-32B-Instruct"
 #model_repo = "Disty0/Qwen3-VL-32B-Instruct-SDNQ-uint4-svd-r32"
+#model_repo = "google/gemma-4-E2B-it"
 #model_repo = "google/gemma-4-E4B-it"
 #model_repo = "google/gemma-4-31B-it"
 
@@ -133,7 +134,9 @@ model_param_size = round(model_param_size * 1.15, 2)
 print(f"Model parameter size: {model_param_size} B")
 
 is_prequantized = False
+use_dynamic_quantization = True
 quantize_weights = "int8" # prefer more batch size
+
 if "sdnq-" in model_repo_lower:
     is_prequantized = True
     quantize_weights = model_repo_lower.split("sdnq-", maxsplit=1)[-1].split("-", maxsplit=1)[0]
@@ -150,8 +153,7 @@ else:
     quantize_weights = "uint4"
 
 use_quantized_matmul = device.type in {"xpu", "cuda"}
-print(f"Using quantization type: {quantize_weights}")
-print(f"Use quantized MatMul: {use_quantized_matmul}")
+quantized_matmul_dtype = "int8" if torch.version.hip or device.type == "xpu" else None
 
 if quantize_weights == "uint3":
     model_param_size = model_param_size * 1.25
@@ -164,7 +166,9 @@ elif quantize_weights == "int6":
     free_memory = (device_memory - min(max_model_memory, model_param_size * 0.75))
 elif quantize_weights == "int7":
     free_memory = (device_memory - min(max_model_memory, model_param_size * 0.88))
-elif quantize_weights in {"int8", "sym_int8"}:
+elif quantize_weights == "int8":
+    if use_quantized_matmul:
+        use_dynamic_quantization = False
     free_memory = (device_memory - min(max_model_memory, model_param_size * 1.00))
 elif dtype == torch.float32:
     free_memory = (device_memory - min(max_model_memory, model_param_size * 4.00))
@@ -172,7 +176,12 @@ else:
     free_memory = (device_memory - min(max_model_memory, model_param_size * 2.00))
 
 free_memory = round(max(free_memory - 1, 0), 2)
+
 print(f"Free memory for compute: {free_memory} GB")
+print(f"Using quantization type: {quantize_weights}")
+print(f"Using quantized MatMul type: {quantized_matmul_dtype if quantized_matmul_dtype is not None else 'auto'}")
+print(f"Use quantized MatMul: {use_quantized_matmul}")
+print(f"Use dynamic quantization: {use_dynamic_quantization}")
 
 offload_cache = free_memory < 4
 if dtype == torch.float32:
@@ -187,7 +196,7 @@ if batch_size > 8:
     batch_size -= batch_size % 4
 else:
     batch_size -= batch_size % 2
-batch_size = max(batch_size, 1)
+batch_size = max(4, 1)
 print(f"Using batch size: {batch_size}")
 
 if os.path.exists(tag_dict_path):
@@ -762,8 +771,7 @@ def main():
 
     if quantize_weights is not None:
         from sdnq import SDNQConfig
-        modules_to_not_convert = ["correction_coefs", "prediction_coefs", "lm_head", "embedding_projection"]
-        quantization_config = SDNQConfig(weights_dtype=quantize_weights, use_quantized_matmul=use_quantized_matmul, quantization_device=device, return_device="cpu", modules_to_not_convert=modules_to_not_convert)
+        quantization_config = SDNQConfig(weights_dtype=quantize_weights, use_quantized_matmul=use_quantized_matmul, quantized_matmul_dtype=quantized_matmul_dtype, use_dynamic_quantization=use_dynamic_quantization, quantization_device=device, return_device="cpu")
     else:
         quantization_config = None
 
