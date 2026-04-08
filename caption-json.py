@@ -100,6 +100,8 @@ is_gemma = "gemma" in model_repo_lower
 is_gemma_e = is_gemma and (caption_key.startswith("gemma-4-e") or caption_key.startswith("gemma-3n-e"))
 is_omni = "omni" in model_repo_lower
 
+no_split_module_classes = ["Gemma4TextDecoderLayer"]
+
 model_kwargs = {
     "use_cache": True,
     "do_sample": False,
@@ -122,11 +124,6 @@ else:
     device_memory = math.ceil(getattr(torch, device.type).get_device_properties(device).total_memory / 1024 / 1024 / 1024)
 
 max_model_memory = max(1, device_memory-4)
-print(f"Model repo: {model_repo}")
-print(f"Caption key: {caption_key}")
-print(f"Device memory: {device_memory} GB")
-print(f"Max model memory: {max_model_memory} GB")
-
 model_param_size = model_repo_lower.rsplit("b-", maxsplit=1)[0].rsplit("b-a", maxsplit=1)[0].rsplit("-", maxsplit=1)[-1].replace("b","")
 if model_param_size.startswith("e"):
     model_param_size = int(model_param_size.replace("e","")) * 2
@@ -799,7 +796,7 @@ def main():
         model = apply_options_to_model(model, use_quantized_matmul=use_quantized_matmul)
 
     print("Model size:", round(sum(p.numel() * p.element_size() for p in model.parameters()) / 1024 / 1024 / 1024, 2), "GB")
-    model = dispatch_model(model, device_map=infer_auto_device_map(model, max_memory={device.index or 0: f"{max_model_memory}GB", "cpu": "4096GB"}, no_split_module_classes=["Gemma4TextDecoderLayer"]))
+    model = dispatch_model(model, device_map=infer_auto_device_map(model, max_memory={device.index or 0: f"{max_model_memory}GB", "cpu": "4096GB"}, no_split_module_classes=no_split_module_classes))
 
     gc.collect()
     if device.type != "cpu":
