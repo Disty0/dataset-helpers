@@ -237,7 +237,7 @@ def main():
     for _ in tqdm(range(epoch_len)):
         try:
             inputs, image_paths = image_backend.get_images()
-            image_embeds = clipmodel.get_image_features(pixel_values=inputs.to(device))
+            image_embeds = clipmodel.get_image_features(pixel_values=inputs.to(device)).pooler_output
             image_embeds_l2 = image_embeds.norm(2, -1, keepdim=True)
             image_embeds_l2[image_embeds_l2 == 0] = 1
             image_embeds = image_embeds / image_embeds_l2

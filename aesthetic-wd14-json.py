@@ -224,7 +224,7 @@ def main():
     for _ in tqdm(range(epoch_len)):
         try:
             inputs, image_paths = image_backend.get_images()
-            image_embeds = clipmodel.get_image_features(pixel_values=inputs.to(device))
+            image_embeds = clipmodel.get_image_features(pixel_values=inputs.to(device)).pooler_output
             image_embeds = image_embeds / torch.linalg.norm(image_embeds, dim=1).unsqueeze(-1)
             predictions = aes_model(image_embeds)
             save_backend.save(predictions, image_paths)

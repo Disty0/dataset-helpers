@@ -73,8 +73,8 @@ model_repo = "Disty0/Qwen3-VL-8B-NSFW-Caption-V4.5"
 #model_repo = "Qwen/Qwen3-VL-8B-Instruct"
 #model_repo = "Qwen/Qwen3-VL-32B-Instruct"
 #model_repo = "Disty0/Qwen3-VL-32B-Instruct-SDNQ-uint4-svd-r32"
-#model_repo = "google/gemma-3n-E4B-it"
-#model_repo = "google/gemma-3-27b-it"
+#model_repo = "google/gemma-4-E4B-it"
+#model_repo = "google/gemma-4-31B-it"
 
 tag_dict_path = os.path.join(os.path.dirname(__file__), "tag_dict.json")
 char_dict_path = os.path.join(os.path.dirname(__file__), "char_dict.json")
@@ -146,10 +146,8 @@ elif model_param_size / 1.33 < max_model_memory:
     quantize_weights = "int6"
 elif model_param_size / 1.6 < max_model_memory:
     quantize_weights = "int5"
-elif model_param_size / 2 < max_model_memory:
-    quantize_weights = "uint4"
 else:
-    quantize_weights = "uint3"
+    quantize_weights = "uint4"
 
 use_quantized_matmul = device.type in {"xpu", "cuda"}
 print(f"Using quantization type: {quantize_weights}")
