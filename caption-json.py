@@ -97,6 +97,7 @@ device = torch.device("xpu" if hasattr(torch,"xpu") and torch.xpu.is_available()
 dtype = torch.bfloat16 if device.type != "cpu" else torch.float32
 use_flash_atten = device.type == "cuda" and torch.version.cuda
 is_gemma = "gemma" in model_repo_lower
+is_gemma_e = is_gemma and (caption_key.startswith("gemma-4-e") or caption_key.startswith("gemma-3n-e"))
 is_omni = "omni" in model_repo_lower
 
 model_kwargs = {
@@ -132,11 +133,12 @@ if model_param_size.startswith("e"):
 else:
     model_param_size = int(model_param_size)
 model_param_size = round(model_param_size * 1.15, 2)
-print(f"Model parameter size: {model_param_size} B")
 
 is_prequantized = False
 use_dynamic_quantization = True
+use_quantized_matmul = device.type in {"xpu", "cuda"}
 quantize_weights = "int8" # prefer more batch size
+quantized_matmul_dtype = "int8" if torch.version.hip or device.type == "xpu" else None
 
 if "sdnq-" in model_repo_lower:
     is_prequantized = True
@@ -153,8 +155,8 @@ elif model_param_size / 1.6 < max_model_memory:
 else:
     quantize_weights = "uint4"
 
-use_quantized_matmul = device.type in {"xpu", "cuda"}
-quantized_matmul_dtype = "int8" if torch.version.hip or device.type == "xpu" else None
+if is_gemma_e and quantize_weights is not None:
+    quantize_weights = "int8" # gemma has most of its weights not quantizable
 
 if quantize_weights == "uint3":
     model_param_size = model_param_size * 1.25
@@ -177,14 +179,8 @@ else:
     free_memory = (device_memory - min(max_model_memory, model_param_size * 2.00))
 
 free_memory = round(max(free_memory - 1, 0), 2)
-
-print(f"Free memory for compute: {free_memory} GB")
-print(f"Using quantization type: {quantize_weights}")
-print(f"Using quantized MatMul type: {quantized_matmul_dtype if quantized_matmul_dtype is not None else 'auto'}")
-print(f"Use quantized MatMul: {use_quantized_matmul}")
-print(f"Use dynamic quantization: {use_dynamic_quantization}")
-
 offload_cache = free_memory < 4
+
 if dtype == torch.float32:
     batch_size = int((free_memory) / math.sqrt(model_param_size))
 elif not use_quantized_matmul:
@@ -199,7 +195,19 @@ else:
     batch_size -= batch_size % 2
 batch_size = min(batch_size, math.ceil(device_memory))
 batch_size = max(batch_size, 1)
+
+print(f"Model repo: {model_repo}")
+print(f"Caption key: {caption_key}")
+print(f"Device memory: {device_memory} GB")
+print(f"Max model memory: {max_model_memory} GB")
+print(f"Model parameter size: {model_param_size} B")
+print(f"Free memory for compute: {free_memory} GB")
+print(f"Offload cache: {offload_cache}")
 print(f"Using batch size: {batch_size}")
+print(f"Using quantization type: {quantize_weights}")
+print(f"Using quantized MatMul type: {quantized_matmul_dtype if quantized_matmul_dtype is not None else 'auto'}")
+print(f"Use quantized MatMul: {use_quantized_matmul}")
+print(f"Use dynamic quantization: {use_dynamic_quantization}")
 
 if os.path.exists(tag_dict_path):
     with open(tag_dict_path, "r") as f:
@@ -791,7 +799,7 @@ def main():
         model = apply_options_to_model(model, use_quantized_matmul=use_quantized_matmul)
 
     print("Model size:", round(sum(p.numel() * p.element_size() for p in model.parameters()) / 1024 / 1024 / 1024, 2), "GB")
-    model = dispatch_model(model, device_map=infer_auto_device_map(model, max_memory={device.index or 0: f"{max_model_memory}GB", "cpu": "4096GB"}))
+    model = dispatch_model(model, device_map=infer_auto_device_map(model, max_memory={device.index or 0: f"{max_model_memory}GB", "cpu": "4096GB"}, no_split_module_classes=["Gemma4TextDecoderLayer"]))
 
     gc.collect()
     if device.type != "cpu":
