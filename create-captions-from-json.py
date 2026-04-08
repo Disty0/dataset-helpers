@@ -375,6 +375,6 @@ if __name__ == "__main__":
     # florence-2-base-promptgen-v1-5
     parser = argparse.ArgumentParser(description="Create tags from json")
     parser.add_argument("--out_path", default="", type=str)
-    parser.add_argument("--caption_key", default="qwen3-vl-8b-nsfw-caption-v4-5", type=str)
+    parser.add_argument("--caption_key", default="gemma-4-e4b-it", type=str)
     args = parser.parse_args()
     main(args.out_path, args.caption_key)

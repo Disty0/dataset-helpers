@@ -69,12 +69,12 @@ use_torch_compile = False # torch.compile causes nonsense outputs
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
-model_repo = "Disty0/Qwen3-VL-8B-NSFW-Caption-V4.5"
+#model_repo = "Disty0/Qwen3-VL-8B-NSFW-Caption-V4.5"
 #model_repo = "Qwen/Qwen3-VL-8B-Instruct"
 #model_repo = "Qwen/Qwen3-VL-32B-Instruct"
 #model_repo = "Disty0/Qwen3-VL-32B-Instruct-SDNQ-uint4-svd-r32"
 #model_repo = "google/gemma-4-E2B-it"
-#model_repo = "google/gemma-4-E4B-it"
+model_repo = "google/gemma-4-E4B-it"
 #model_repo = "google/gemma-4-31B-it"
 #model_repo = "google/gemma-4-26B-A4B-it"
 
