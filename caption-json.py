@@ -131,7 +131,7 @@ else:
 model_param_size = round(model_param_size * 1.15, 2)
 
 is_prequantized = False
-quant_embedding = is_gemma_e and device_memory < 16
+quant_embedding = is_gemma_e and device_memory <= 12
 use_dynamic_quantization = True
 use_quantized_matmul = device.type == "cuda"
 quantize_weights = "int8" # prefer more batch size
