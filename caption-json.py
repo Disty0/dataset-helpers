@@ -65,7 +65,7 @@ max_image_size = 1048576 # 1024x1024
 max_new_tokens = 1024
 max_input_tokens = 1024
 use_tunable_ops = False # Set to True for performance increase for AMD, uses quite a bit of VRAM when tuning
-use_torch_compile = False # torch.compile causes nonsense outputs
+use_torch_compile = True
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
@@ -804,14 +804,7 @@ def main():
         getattr(torch, device.type).empty_cache()
 
     if use_torch_compile:
-        if is_gemma:
-            model.model.embed_vision = torch.compile(model.model.embed_vision, backend="inductor")
-            model.model.vision_tower = torch.compile(model.model.vision_tower, backend="inductor")
-            model.model.model = torch.compile(model.model, backend="inductor")
-        else:
-            model.visual = torch.compile(model.visual, backend="inductor")
-            model.lm_head = torch.compile(model.lm_head, backend="inductor")
-            model.model = torch.compile(model.model, backend="inductor")
+        model = torch.compile(model, backend="inductor")
 
     print(f"Searching for {img_ext_list} files...")
     file_list = []
