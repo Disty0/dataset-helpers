@@ -128,15 +128,15 @@ if model_param_size.startswith("e"):
     model_param_size = int(model_param_size.replace("e","")) * 2
 else:
     model_param_size = int(model_param_size)
-model_param_size = round(model_param_size * 1.15, 2)
+model_param_size = round(model_param_size * (1.0 if is_gemma_e else 1.15), 2)
 
 is_prequantized = False
 quant_embedding = is_gemma_e and device_memory <= 12
 use_dynamic_quantization = True
-use_quantized_matmul = device.type == "cuda"
+use_quantized_matmul = device.type in {"cuda", "xpu"}
 quantize_weights = "int8" # prefer more batch size
 quantized_matmul_dtype = "int8" if torch.version.hip or device.type == "xpu" else None
-max_model_memory = max(1, device_memory - (8 if quant_embedding else 4))
+max_model_memory = max(1, device_memory - (2 if is_gemma else 4))
 
 if "sdnq-" in model_repo_lower:
     is_prequantized = True
@@ -174,11 +174,11 @@ else:
     free_memory = (device_memory - min(max_model_memory, model_param_size * 2.00))
 
 free_memory = round(max(free_memory - 1, 0), 2)
-offload_cache = free_memory < 4
+offload_cache = free_memory < 2
 
 if dtype == torch.float32:
     batch_size = int((free_memory) / math.sqrt(model_param_size))
-elif not use_quantized_matmul or device.type == "xpu":
+elif not use_quantized_matmul:
     batch_size = int((free_memory * 2) / math.sqrt(model_param_size))
 else:
     batch_size = int((free_memory * 4) / math.sqrt(model_param_size))
