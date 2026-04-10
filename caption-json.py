@@ -100,7 +100,7 @@ is_gemma = "gemma" in model_repo_lower
 is_gemma_e = is_gemma and (caption_key.startswith("gemma-4-e") or caption_key.startswith("gemma-3n-e"))
 is_omni = "omni" in model_repo_lower
 
-no_split_module_classes = ["Gemma4TextDecoderLayer"]
+no_split_module_classes = ["Gemma4TextDecoderLayer", "Gemma4TextScaledWordEmbedding", "Gemma4VisionMLP", "Gemma4TextMLP"]
 
 model_kwargs = {
     "use_cache": True,
@@ -123,7 +123,6 @@ if device.type == "cpu":
 else:
     device_memory = math.ceil(getattr(torch, device.type).get_device_properties(device).total_memory / 1024 / 1024 / 1024)
 
-max_model_memory = max(1, device_memory-4)
 model_param_size = model_repo_lower.rsplit("b-", maxsplit=1)[0].rsplit("b-a", maxsplit=1)[0].rsplit("-", maxsplit=1)[-1].replace("b","")
 if model_param_size.startswith("e"):
     model_param_size = int(model_param_size.replace("e","")) * 2
@@ -132,10 +131,12 @@ else:
 model_param_size = round(model_param_size * 1.15, 2)
 
 is_prequantized = False
+quant_embedding = is_gemma_e and device_memory < 16
 use_dynamic_quantization = True
-use_quantized_matmul = device.type in {"xpu", "cuda"}
+use_quantized_matmul = device.type == "cuda"
 quantize_weights = "int8" # prefer more batch size
 quantized_matmul_dtype = "int8" if torch.version.hip or device.type == "xpu" else None
+max_model_memory = max(1, device_memory - (8 if quant_embedding else 4))
 
 if "sdnq-" in model_repo_lower:
     is_prequantized = True
@@ -151,9 +152,6 @@ elif model_param_size / 1.6 < max_model_memory:
     quantize_weights = "int5"
 else:
     quantize_weights = "uint4"
-
-if is_gemma_e and quantize_weights is not None:
-    quantize_weights = "int8" # gemma has most of its weights not quantizable
 
 if quantize_weights == "uint3":
     model_param_size = model_param_size * 1.25
@@ -180,7 +178,7 @@ offload_cache = free_memory < 4
 
 if dtype == torch.float32:
     batch_size = int((free_memory) / math.sqrt(model_param_size))
-elif not use_quantized_matmul:
+elif not use_quantized_matmul or device.type == "xpu":
     batch_size = int((free_memory * 2) / math.sqrt(model_param_size))
 else:
     batch_size = int((free_memory * 4) / math.sqrt(model_param_size))
@@ -205,6 +203,8 @@ print(f"Using quantization type: {quantize_weights}")
 print(f"Using quantized MatMul type: {quantized_matmul_dtype if quantized_matmul_dtype is not None else 'auto'}")
 print(f"Use quantized MatMul: {use_quantized_matmul}")
 print(f"Use dynamic quantization: {use_dynamic_quantization}")
+print(f"Quantize nn.Embedding: {quant_embedding}")
+
 
 if os.path.exists(tag_dict_path):
     with open(tag_dict_path, "r") as f:
@@ -778,7 +778,7 @@ def main():
 
     if quantize_weights is not None:
         from sdnq import SDNQConfig
-        quantization_config = SDNQConfig(weights_dtype=quantize_weights, use_quantized_matmul=use_quantized_matmul, quantized_matmul_dtype=quantized_matmul_dtype, use_dynamic_quantization=use_dynamic_quantization, quantization_device=device, return_device="cpu")
+        quantization_config = SDNQConfig(weights_dtype=quantize_weights, use_quantized_matmul=use_quantized_matmul, quantized_matmul_dtype=quantized_matmul_dtype, use_dynamic_quantization=use_dynamic_quantization, quant_embedding=quant_embedding, quantization_device="cpu" if quant_embedding else device, return_device="cpu")
     else:
         quantization_config = None
 
@@ -796,8 +796,7 @@ def main():
         model = apply_options_to_model(model, use_quantized_matmul=use_quantized_matmul)
 
     print("Model size:", round(sum(p.numel() * p.element_size() for p in model.parameters()) / 1024 / 1024 / 1024, 2), "GB")
-    model = dispatch_model(model, device_map=infer_auto_device_map(model, max_memory={device.index or 0: f"{max_model_memory}GB", "cpu": "4096GB"}, no_split_module_classes=no_split_module_classes))
-
+    model = dispatch_model(model, device_map=infer_auto_device_map(model, max_memory={device.index or 0: f"{max_model_memory}GB", "cpu": "4096GB"}, no_split_module_classes=no_split_module_classes), force_hooks=True)
     gc.collect()
     if device.type != "cpu":
         getattr(torch, device.type).synchronize()
