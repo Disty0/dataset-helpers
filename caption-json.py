@@ -101,6 +101,7 @@ is_gemma_e = is_gemma and (caption_key.startswith("gemma-4-e") or caption_key.st
 is_omni = "omni" in model_repo_lower
 
 no_split_module_classes = ["Gemma4TextDecoderLayer", "Gemma4TextScaledWordEmbedding", "Gemma4VisionMLP", "Gemma4TextMLP"]
+modules_quant_config = {"embed_tokens_per_layer": {"quantization_device": "cpu"}}
 
 model_kwargs = {
     "use_cache": True,
@@ -778,7 +779,7 @@ def main():
 
     if quantize_weights is not None:
         from sdnq import SDNQConfig
-        quantization_config = SDNQConfig(weights_dtype=quantize_weights, use_quantized_matmul=use_quantized_matmul, quantized_matmul_dtype=quantized_matmul_dtype, use_dynamic_quantization=use_dynamic_quantization, quant_embedding=quant_embedding, quantization_device="cpu" if quant_embedding else device, return_device="cpu")
+        quantization_config = SDNQConfig(weights_dtype=quantize_weights, use_quantized_matmul=use_quantized_matmul, quantized_matmul_dtype=quantized_matmul_dtype, use_dynamic_quantization=use_dynamic_quantization, quant_embedding=quant_embedding, quantization_device=device, return_device="cpu", modules_quant_config=modules_quant_config)
     else:
         quantization_config = None
 
