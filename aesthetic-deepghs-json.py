@@ -22,7 +22,7 @@ from PIL import Image # noqa: E402
 
 from typing import List, Tuple
 
-batch_size = 32
+batch_size = 6
 model_repo = "deepghs/anime_aesthetic"
 model_name = "swinv2pv3_v0_448_ls0.2_x"
 model_filename = "model.onnx"

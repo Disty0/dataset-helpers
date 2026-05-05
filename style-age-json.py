@@ -21,7 +21,7 @@ from PIL import Image # noqa: E402
 
 from typing import List, Tuple
 
-batch_size = 32
+batch_size = 24
 model_repo = "deepghs/anime_style_ages"
 model_filename = "mobilenetv3_v0_dist/model.onnx"
 label_filename = "mobilenetv3_v0_dist/meta.json"

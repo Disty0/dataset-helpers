@@ -549,16 +549,9 @@ def main():
     processor = AutoProcessor.from_pretrained(model_repo, use_fast=True)
     model = Florence2ForConditionalGeneration.from_pretrained(model_repo, dtype=dtype, attn_implementation="flash_attention_2" if use_flash_atten else None).to(device, dtype=dtype).eval()
     model.requires_grad_(False)
-    model.vision_tower.eval()
-    model.vision_tower.requires_grad_(False)
-    model.language_model.eval()
-    model.language_model.requires_grad_(False)
 
     if use_torch_compile:
-        model.vision_tower = torch.compile(model.vision_tower, backend="inductor")
-        model.multi_modal_projector = torch.compile(model.multi_modal_projector, backend="inductor")
-        model.language_model = torch.compile(model.language_model, backend="inductor")
-
+        model = torch.compile(model, backend="inductor")
 
     print(f"Searching for {img_ext_list} files...")
     file_list = []
