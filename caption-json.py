@@ -93,7 +93,7 @@ booru_tag_prompt = "These are the tags for the image in random order, use them f
 
 model_repo_lower = model_repo.lower()
 caption_key = model_repo_lower.rsplit("/", maxsplit=1)[-1].replace(".", "-")
-device = torch.device("xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device(os.environ.get("TORCH_DEVICE", "xpu" if hasattr(torch,"xpu") and torch.xpu.is_available() else "cuda" if torch.cuda.is_available() else "cpu"))
 dtype = torch.bfloat16 if device.type != "cpu" else torch.float32
 use_flash_atten = device.type == "cuda" and torch.version.cuda
 is_gemma = "gemma" in model_repo_lower
