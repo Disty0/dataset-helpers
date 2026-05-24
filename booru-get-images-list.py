@@ -6,7 +6,7 @@ import json
 import time
 import argparse
 import pybooru
-import requests
+from urllib import requestrequests
 from tqdm import tqdm
 
 image_ext = ".jxl"
@@ -159,7 +159,7 @@ for id in tqdm(id_list):
             and not any([bool(tag in image_data["tag_string_meta"]) for tag in meta_blacklist])
         ):
             try:
-                image = requests.get(image_data["file_url"], stream=True).raw
+                image = request.urlopen(image_data["file_url"])
                 if image_ext == ".jxl" and image_data["file_ext"] in {"jpg", "jpeg"}:
                     jpg_path = os.path.join(folder, str(id)+".jpg")
                     with open(jpg_path, "wb") as jpg_file:
