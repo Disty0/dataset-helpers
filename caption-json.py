@@ -61,11 +61,6 @@ except Exception:
     pass
 from PIL import Image # noqa: E402
 
-max_image_size = 1048576 # 1024x1024
-max_new_tokens = 1024
-max_input_tokens = 1024
-use_tunable_ops = False # Set to True for performance increase for AMD, uses quite a bit of VRAM when tuning
-use_torch_compile = True
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
@@ -103,15 +98,6 @@ is_omni = "omni" in model_repo_lower
 no_split_module_classes = ["Gemma4TextDecoderLayer", "Gemma4TextScaledWordEmbedding", "Gemma4VisionMLP", "Gemma4TextMLP"]
 modules_quant_config = {"embed_tokens_per_layer": {"quantization_device": "cpu"}}
 
-model_kwargs = {
-    "use_cache": True,
-    "do_sample": False,
-    "repetition_penalty": 1.025,
-    "max_new_tokens": max_new_tokens,
-}
-if is_omni:
-    model_kwargs["return_audio"] = False
-
 if "qwen3-omni" in model_repo_lower:
     from transformers import Qwen3OmniMoeForConditionalGeneration
     model_cls = Qwen3OmniMoeForConditionalGeneration
@@ -132,12 +118,28 @@ else:
 model_param_size = round(model_param_size * (1.0 if is_gemma_e else 1.15), 2)
 
 is_prequantized = False
+use_tunable_ops = False
+use_torch_compile = False
+use_dynamic_quantization = False
+use_quantized_matmul = False
+
 quant_embedding = is_gemma_e
-use_dynamic_quantization = True
-use_quantized_matmul = device.type in {"cuda", "xpu"}
 quantize_weights = "int8" # prefer more batch size
 quantized_matmul_dtype = "int8" if torch.version.hip or device.type == "xpu" else None
+
 max_model_memory = max(1, device_memory - (2 if is_gemma else 4))
+max_image_size = 1048576 # 1024x1024
+max_new_tokens = 1024
+max_input_tokens = 1024
+
+model_kwargs = {
+    "use_cache": True,
+    "do_sample": False,
+    "repetition_penalty": 1.025,
+    "max_new_tokens": max_new_tokens,
+}
+if is_omni:
+    model_kwargs["return_audio"] = False
 
 if "sdnq-" in model_repo_lower:
     is_prequantized = True
@@ -179,8 +181,8 @@ offload_cache = free_memory < 2
 
 if dtype == torch.float32:
     batch_size = int((free_memory) / math.sqrt(model_param_size))
-elif not use_quantized_matmul:
-    batch_size = int((free_memory * 2) / math.sqrt(model_param_size))
+#elif not use_quantized_matmul:
+#    batch_size = int((free_memory * 2) / math.sqrt(model_param_size))
 else:
     batch_size = int((free_memory * 4) / math.sqrt(model_param_size))
 if batch_size > 16:

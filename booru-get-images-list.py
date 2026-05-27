@@ -6,7 +6,7 @@ import json
 import time
 import argparse
 import pybooru
-from urllib import requestrequests
+from urllib import request
 from tqdm import tqdm
 
 image_ext = ".jxl"
