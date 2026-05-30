@@ -161,7 +161,7 @@ def main():
         model = ort.InferenceSession(
             model_path,
             providers=(["OpenVINOExecutionProvider"]),
-            provider_options=[{"device_type" : "GPU", "precision": "FP16"}],
+            provider_options=[{"device_type" : "AUTO", "precision": "FP16"}],
         )
     else:
         model = ort.InferenceSession(
