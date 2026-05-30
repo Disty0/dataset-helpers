@@ -167,6 +167,7 @@ def main():
         model = ort.InferenceSession(
             model_path,
             providers=(
+                ["MIGraphXExecutionProvider"] if "MIGraphXExecutionProvider" in ort.get_available_providers() else
                 ["CUDAExecutionProvider"] if "CUDAExecutionProvider" in ort.get_available_providers() else
                 ["ROCMExecutionProvider"] if "ROCMExecutionProvider" in ort.get_available_providers() else
                 ["CPUExecutionProvider"]
