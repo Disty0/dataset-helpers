@@ -19,7 +19,7 @@ PngImagePlugin.MAX_TEXT_CHUNK = 999999999 # 1024 * 1024
 
 def get_json_data(session, id):
     raw_data = json.loads(session.get(f"https://api.anime-pictures.net/api/v3/posts/{id}").content)
-    if raw_data.get("redirect", None) is not None:
+    if raw_data.get("redirect", None) is not None or raw_data.get("post", None) is None:
         return raw_data
     json_data = raw_data.pop("post")
     json_data["source"] = "anime-pictures"
@@ -42,7 +42,7 @@ def get_json_data(session, id):
     tag_string_meta = []
 
     for tag_dict in json_data["anime_pictures_tags"]:
-        if tag_dict["relation"]["removetime"] is None:
+        if tag_dict["relation"].get("removetime", None) is None:
             tag = tag_dict["tag"]["tag"].replace(" ", "_")
             tag_type = tag_dict["tag"]["type"]
             if tag_type == 1:
