@@ -189,7 +189,12 @@ for id in tqdm(range(args.start, args.end)):
                 error_file.close()
                 continue
 
-        if image_data.get("file_url", None) is not None and image_data.get("redirect", None) is None and image_data.get("redirect_id", None) is None:
+        if (
+            image_data.get("file_url", None) is not None
+            and image_data.get("redirect", None) is None
+            and image_data.get("redirect_id", None) is None
+             and image_data.get("errormsg", None) is None
+        ):
             width = int(image_data["image_width"])
             height = int(image_data["image_height"])
             image_size = width * height
