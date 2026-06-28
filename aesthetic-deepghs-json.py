@@ -20,8 +20,6 @@ except Exception:
     pass
 from PIL import Image # noqa: E402
 
-from typing import List, Tuple
-
 batch_size = 6
 model_repo = "deepghs/anime_aesthetic"
 model_name = "swinv2pv3_v0_448_ls0.2_x"
@@ -33,7 +31,7 @@ Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 
 class ImageBackend():
-    def __init__(self, batches: List[List[str]], load_queue_lenght: int = 256, max_load_workers: int = 4):
+    def __init__(self, batches: list[list[str]], load_queue_lenght: int = 256, max_load_workers: int = 4):
         self.load_queue_lenght = 0
         self.keep_loading = True
         self.batches = Queue()
@@ -47,7 +45,7 @@ class ImageBackend():
         for _ in range(max_load_workers):
             self.load_thread.submit(self.load_thread_func)
 
-    def get_images(self) -> Tuple[np.ndarray, List[str]]:
+    def get_images(self) -> tuple[np.ndarray, list[str]]:
         result = self.load_queue.get()
         self.load_queue_lenght -= 1
         return result
@@ -84,7 +82,7 @@ class ImageBackend():
 
 
 class SaveTagBackend():
-    def __init__(self, model_config: dict, mark_table: List[np.ndarray], max_save_workers: int = 2):
+    def __init__(self, model_config: dict, mark_table: list[np.ndarray], max_save_workers: int = 2):
         self.model_config = model_config
         self.mark_table = mark_table
         self.keep_saving = True
@@ -93,7 +91,7 @@ class SaveTagBackend():
         for _ in range(max_save_workers):
             self.save_thread.submit(self.save_thread_func)
 
-    def save(self, data: np.ndarray, path: List[str]) -> None:
+    def save(self, data: np.ndarray, path: list[str]) -> None:
         self.save_queue.put((data,path))
 
     def save_thread_func(self) -> None:
@@ -106,7 +104,7 @@ class SaveTagBackend():
                 time.sleep(0.25)
         print("Stopping the save backend threads")
 
-    def save_to_file(self, data: Tuple[str, float], path: str) -> None:
+    def save_to_file(self, data: tuple[str, float], path: str) -> None:
         with open(path, "r") as json_file:
             json_data = json.load(json_file)
         json_data[model_name] = data[0]
@@ -114,7 +112,7 @@ class SaveTagBackend():
         with open(path, "w") as f:
             json.dump(json_data, f)
 
-    def get_tags(self, predictions: np.ndarray) -> Tuple[str, float]:
+    def get_tags(self, predictions: np.ndarray) -> tuple[str, float]:
         values = dict(zip(self.model_config["labels"], map(lambda x: x.item(), predictions)))
         weighted_mean = sum(i * values[label] for i, label in enumerate(self.model_config["labels"]))
         idx = np.searchsorted(self.mark_table[0], np.clip(weighted_mean, a_min=0.0, a_max=6.0))

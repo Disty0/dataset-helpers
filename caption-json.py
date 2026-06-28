@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-from typing import Dict, List, Tuple, Optional, Union
 
 import os
 os.environ.setdefault("UR_L0_ENABLE_RELAXED_ALLOCATION_LIMITS", "1")
@@ -12,41 +11,6 @@ import atexit
 import random
 
 import torch
-if torch.version.hip:
-    try:
-        # don't use this for training models, only for inference with latent encoder and embed encoder
-        # https://github.com/huggingface/diffusers/discussions/7172
-        from functools import wraps
-        from flash_attn import flash_attn_func
-        sdpa_pre_flash_atten = torch.nn.functional.scaled_dot_product_attention
-        @wraps(sdpa_pre_flash_atten)
-        def sdpa_flash_atten(query: torch.FloatTensor, key: torch.FloatTensor, value: torch.FloatTensor, attn_mask: Optional[torch.FloatTensor] = None, dropout_p: float = 0.0, is_causal: bool = False, scale: Optional[float] = None, enable_gqa: bool = False, **kwargs) -> torch.FloatTensor:
-            if query.shape[-1] <= 128 and attn_mask is None and query.dtype != torch.float32:
-                is_unsqueezed = False
-                if query.dim() == 3:
-                    query = query.unsqueeze(0)
-                    is_unsqueezed = True
-                    if key.dim() == 3:
-                        key = key.unsqueeze(0)
-                    if value.dim() == 3:
-                        value = value.unsqueeze(0)
-                if enable_gqa:
-                    key = key.repeat_interleave(query.size(-3)//key.size(-3), -3)
-                    value = value.repeat_interleave(query.size(-3)//value.size(-3), -3)
-                query = query.transpose(1, 2)
-                key = key.transpose(1, 2)
-                value = value.transpose(1, 2)
-                attn_output = flash_attn_func(q=query, k=key, v=value, dropout_p=dropout_p, causal=is_causal, softmax_scale=scale).transpose(1, 2)
-                if is_unsqueezed:
-                    attn_output = attn_output.squeeze(0)
-                return attn_output
-            else:
-                if enable_gqa:
-                    kwargs["enable_gqa"] = enable_gqa
-                return sdpa_pre_flash_atten(query=query, key=key, value=value, attn_mask=attn_mask, dropout_p=dropout_p, is_causal=is_causal, scale=scale, **kwargs)
-        torch.nn.functional.scaled_dot_product_attention = sdpa_flash_atten
-    except Exception as e:
-        print(f"Failed to enable Flash Atten for ROCm: {e}")
 
 from transformers import AutoModelForImageTextToText, AutoProcessor
 from accelerate import infer_auto_device_map, dispatch_model
@@ -358,14 +322,14 @@ def check_dropout(dropout: float) -> bool:
     return bool(dropout == 0 or (dropout > 0 and random.randint(0,100) > dropout * 100))
 
 
-def get_aes_score(score: int, score_dict: Dict[int, int]) -> int:
+def get_aes_score(score: int, score_dict: dict[int, int]) -> int:
     for i in reversed(range(6)):
         if score > score_dict[i+1]:
             return i+1
     return 0
 
 
-def get_combined_aes_score(scores: List[int], score_dicts: List[Dict[int, int]]) -> int:
+def get_combined_aes_score(scores: list[int], score_dicts: list[dict[int, int]]) -> int:
     combined_score = 0
     for score in scores:
         combined_score += score
@@ -376,7 +340,7 @@ def get_combined_aes_score(scores: List[int], score_dicts: List[Dict[int, int]])
     return get_aes_score(combined_score, combined_score_dict)
 
 
-def get_aesthetic_tag(json_data: Dict[str, int]) -> str:
+def get_aesthetic_tag(json_data: dict[str, int]) -> str:
     scores = []
     score_dicts = []
     if json_data.get("wd-aes-b32-v0", None) is not None:
@@ -401,7 +365,7 @@ def get_aesthetic_tag(json_data: Dict[str, int]) -> str:
     return aes_score_to_tag[aes_score]
 
 
-def get_quality_tag(json_data: Dict[str, int], caption_key: str) -> str:
+def get_quality_tag(json_data: dict[str, int], caption_key: str) -> str:
     if json_data.get("fav_count", None) is not None or json_data.get("score", None) is not None:
         quality_score = get_aes_score(
             json_data.get("fav_count", json_data["score"]),
@@ -417,7 +381,7 @@ def get_quality_tag(json_data: Dict[str, int], caption_key: str) -> str:
     return quality_score_to_tag[quality_score]
 
 
-def dedupe_tags(split_tags: List[str], no_shuffle: bool) -> List[str]:
+def dedupe_tags(split_tags: list[str], no_shuffle: bool) -> list[str]:
     if len(split_tags) <= 1:
         return split_tags
     split_tags.sort(key=len, reverse=True)
@@ -433,7 +397,7 @@ def dedupe_tags(split_tags: List[str], no_shuffle: bool) -> List[str]:
     return deduped_tags
 
 
-def dedupe_character_tags(split_tags: List[str], no_shuffle: bool) -> List[str]:
+def dedupe_character_tags(split_tags: list[str], no_shuffle: bool) -> list[str]:
     if len(split_tags) <= 1:
         return split_tags
     split_tags.sort(key=len, reverse=True)
@@ -457,7 +421,7 @@ def dedupe_character_tags(split_tags: List[str], no_shuffle: bool) -> List[str]:
     return deduped_tags
 
 
-def get_tags_from_json(json_path: str, image_path: str, caption_key: str, dropout: Tuple[float], no_shuffle: bool, general_only: bool) -> Tuple[str, Dict[str, str]]:
+def get_tags_from_json(json_path: str, image_path: str, caption_key: str, dropout: tuple[float], no_shuffle: bool, general_only: bool) -> tuple[str, dict[str, str]]:
     if isinstance(dropout, (float, int)):
         dropout_aesthetic = dropout_quality = dropout_year = dropout_style = dropout_special = dropout_artist = dropout_medium = dropout_rating = dropout_no_shuffle = dropout_character = dropout_copyright = dropout_general = dropout_meta = dropout
     else:
@@ -643,7 +607,7 @@ def get_tags_from_json(json_path: str, image_path: str, caption_key: str, dropou
 
 
 class ImageBackend():
-    def __init__(self, batches: List[List[str]], processor: AutoProcessor, load_queue_lenght: int = 32, max_load_workers: int = 1):
+    def __init__(self, batches: list[list[str]], processor: AutoProcessor, load_queue_lenght: int = 32, max_load_workers: int = 1):
         self.load_queue_lenght = 0
         self.keep_loading = True
         self.batches = Queue()
@@ -658,7 +622,7 @@ class ImageBackend():
         for _ in range(max_load_workers):
             self.load_thread.submit(self.load_thread_func)
 
-    def get_images(self) -> Tuple[List[Dict[str, torch.Tensor]], List[str], str]:
+    def get_images(self) -> tuple[list[dict[str, torch.Tensor]], list[str], str]:
         result = self.load_queue.get()
         self.load_queue_lenght -= 1
         return result
@@ -700,7 +664,7 @@ class ImageBackend():
                 time.sleep(5)
         print("Stopping the image loader threads")
 
-    def load_from_file(self, image_path: str) -> Tuple[Image.Image, str, str]:
+    def load_from_file(self, image_path: str) -> tuple[Image.Image, str, str]:
         prompt = base_prompt
         sys_prompt_to_use = system_prompt
         json_path = os.path.splitext(image_path)[0]+".json"
@@ -739,7 +703,7 @@ class SaveCaptionBackend():
         for _ in range(max_save_workers):
             self.save_thread.submit(self.save_thread_func)
 
-    def save(self, generated_ids: Union[List[List[int]], torch.Tensor], image_paths: List[str]) -> None:
+    def save(self, generated_ids: list[list[int]] | torch.Tensor, image_paths: list[str]) -> None:
         self.save_queue.put((generated_ids, image_paths))
 
     @torch.inference_mode()

@@ -12,8 +12,6 @@ from glob import glob
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
 
-from typing import Dict, List, Tuple
-
 
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 tag_dict_path = os.path.join(os.path.dirname(__file__), "tag_dict.json")
@@ -169,14 +167,14 @@ def check_dropout(dropout: float) -> bool:
     return bool(dropout == 0 or (dropout > 0 and random.randint(0,100) > dropout * 100))
 
 
-def get_aes_score(score: int, score_dict: Dict[int, int]) -> int:
+def get_aes_score(score: int, score_dict: dict[int, int]) -> int:
     for i in reversed(range(6)):
         if score > score_dict[i+1]:
             return i+1
     return 0
 
 
-def get_combined_aes_score(scores: List[int], score_dicts: List[Dict[int, int]]) -> int:
+def get_combined_aes_score(scores: list[int], score_dicts: list[dict[int, int]]) -> int:
     combined_score = 0
     for score in scores:
         combined_score += score
@@ -187,7 +185,7 @@ def get_combined_aes_score(scores: List[int], score_dicts: List[Dict[int, int]])
     return get_aes_score(combined_score, combined_score_dict)
 
 
-def get_aesthetic_tag(json_data: Dict[str, int]) -> str:
+def get_aesthetic_tag(json_data: dict[str, int]) -> str:
     scores = []
     score_dicts = []
     if json_data.get("wd-aes-b32-v0", None) is not None:
@@ -212,7 +210,7 @@ def get_aesthetic_tag(json_data: Dict[str, int]) -> str:
     return aes_score_to_tag[aes_score]
 
 
-def get_quality_tag(json_data: Dict[str, int], caption_key: str) -> str:
+def get_quality_tag(json_data: dict[str, int], caption_key: str) -> str:
     if json_data.get("fav_count", None) is not None or json_data.get("score", None) is not None:
         quality_score = get_aes_score(
             json_data.get("fav_count", json_data["score"]),
@@ -228,7 +226,7 @@ def get_quality_tag(json_data: Dict[str, int], caption_key: str) -> str:
     return quality_score_to_tag[quality_score]
 
 
-def dedupe_tags(split_tags: List[str], no_shuffle: bool) -> List[str]:
+def dedupe_tags(split_tags: list[str], no_shuffle: bool) -> list[str]:
     if len(split_tags) <= 1:
         return split_tags
     split_tags.sort(key=len, reverse=True)
@@ -244,7 +242,7 @@ def dedupe_tags(split_tags: List[str], no_shuffle: bool) -> List[str]:
     return deduped_tags
 
 
-def dedupe_character_tags(split_tags: List[str], no_shuffle: bool) -> List[str]:
+def dedupe_character_tags(split_tags: list[str], no_shuffle: bool) -> list[str]:
     if len(split_tags) <= 1:
         return split_tags
     split_tags.sort(key=len, reverse=True)
@@ -268,7 +266,7 @@ def dedupe_character_tags(split_tags: List[str], no_shuffle: bool) -> List[str]:
     return deduped_tags
 
 
-def get_tags_from_json(json_path: str, image_path: str, caption_key: str, dropout: Tuple[float], no_shuffle: bool, general_only: bool) -> str:
+def get_tags_from_json(json_path: str, image_path: str, caption_key: str, dropout: tuple[float], no_shuffle: bool, general_only: bool) -> str:
     if isinstance(dropout, (float, int)):
         dropout_aesthetic = dropout_quality = dropout_year = dropout_style = dropout_special = dropout_artist = dropout_medium = dropout_rating = dropout_no_shuffle = dropout_character = dropout_copyright = dropout_general = dropout_meta = dropout
     else:
@@ -474,7 +472,7 @@ class SaveTagBackend():
         caption_file.close()
 
 
-def main(out_path: str, caption_key: str, dropout: Tuple[float], no_shuffle: bool, general_only: bool):
+def main(out_path: str, caption_key: str, dropout: tuple[float], no_shuffle: bool, general_only: bool):
     steps_after_gc = 0
     print(f"Searching for {img_ext_list} files...")
     file_list = []

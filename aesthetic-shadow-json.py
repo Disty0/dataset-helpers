@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 
-from typing import Optional
-
 import os
 import gc
 import json
@@ -9,41 +7,6 @@ import time
 import atexit
 
 import torch
-if torch.version.hip:
-    try:
-        # don't use this for training models, only for inference with latent encoder and embed encoder
-        # https://github.com/huggingface/diffusers/discussions/7172
-        from functools import wraps
-        from flash_attn import flash_attn_func
-        sdpa_pre_flash_atten = torch.nn.functional.scaled_dot_product_attention
-        @wraps(sdpa_pre_flash_atten)
-        def sdpa_flash_atten(query: torch.FloatTensor, key: torch.FloatTensor, value: torch.FloatTensor, attn_mask: Optional[torch.FloatTensor] = None, dropout_p: float = 0.0, is_causal: bool = False, scale: Optional[float] = None, enable_gqa: bool = False, **kwargs) -> torch.FloatTensor:
-            if query.shape[-1] <= 128 and attn_mask is None and query.dtype != torch.float32:
-                is_unsqueezed = False
-                if query.dim() == 3:
-                    query = query.unsqueeze(0)
-                    is_unsqueezed = True
-                    if key.dim() == 3:
-                        key = key.unsqueeze(0)
-                    if value.dim() == 3:
-                        value = value.unsqueeze(0)
-                if enable_gqa:
-                    key = key.repeat_interleave(query.size(-3)//key.size(-3), -3)
-                    value = value.repeat_interleave(query.size(-3)//value.size(-3), -3)
-                query = query.transpose(1, 2)
-                key = key.transpose(1, 2)
-                value = value.transpose(1, 2)
-                attn_output = flash_attn_func(q=query, k=key, v=value, dropout_p=dropout_p, causal=is_causal, softmax_scale=scale).transpose(1, 2)
-                if is_unsqueezed:
-                    attn_output = attn_output.squeeze(0)
-                return attn_output
-            else:
-                if enable_gqa:
-                    kwargs["enable_gqa"] = enable_gqa
-                return sdpa_pre_flash_atten(query=query, key=key, value=value, attn_mask=attn_mask, dropout_p=dropout_p, is_causal=is_causal, scale=scale, **kwargs)
-        torch.nn.functional.scaled_dot_product_attention = sdpa_flash_atten
-    except Exception as e:
-        print(f"Failed to enable Flash Atten for ROCm: {e}")
 
 from queue import Queue
 from concurrent.futures import ThreadPoolExecutor
@@ -57,8 +20,6 @@ except Exception:
     pass
 from PIL import Image # noqa: E402
 
-from typing import List, Tuple
-
 batch_size = 32
 use_tunable_ops = False
 use_torch_compile = True
@@ -71,7 +32,7 @@ Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 
 class ImageBackend():
-    def __init__(self, batches: List[List[str]], processor: ViTImageProcessor, load_queue_lenght: int = 256, max_load_workers: int = 4):
+    def __init__(self, batches: list[list[str]], processor: ViTImageProcessor, load_queue_lenght: int = 256, max_load_workers: int = 4):
         self.load_queue_lenght = 0
         self.keep_loading = True
         self.batches = Queue()
@@ -86,7 +47,7 @@ class ImageBackend():
         for _ in range(max_load_workers):
             self.load_thread.submit(self.load_thread_func)
 
-    def get_images(self) -> Tuple[torch.FloatTensor, List[str]]:
+    def get_images(self) -> tuple[torch.FloatTensor, list[str]]:
         result = self.load_queue.get()
         self.load_queue_lenght -= 1
         return result
@@ -123,7 +84,7 @@ class SaveAestheticBackend():
         for _ in range(max_save_workers):
             self.save_thread.submit(self.save_thread_func)
 
-    def save(self, data: List[float], path: List[str]) -> None:
+    def save(self, data: list[float], path: list[str]) -> None:
         self.save_queue.put((data,path))
 
     @torch.no_grad()

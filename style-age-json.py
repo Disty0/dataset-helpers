@@ -19,8 +19,6 @@ except Exception:
     pass
 from PIL import Image # noqa: E402
 
-from typing import List, Tuple
-
 batch_size = 24
 model_repo = "deepghs/anime_style_ages"
 model_filename = "mobilenetv3_v0_dist/model.onnx"
@@ -30,7 +28,7 @@ Image.MAX_IMAGE_PIXELS = 999999999 # 178956970
 
 
 class ImageBackend():
-    def __init__(self, batches: List[List[str]], load_queue_lenght: int = 256, max_load_workers: int = 4):
+    def __init__(self, batches: list[list[str]], load_queue_lenght: int = 256, max_load_workers: int = 4):
         self.load_queue_lenght = 0
         self.keep_loading = True
         self.batches = Queue()
@@ -44,7 +42,7 @@ class ImageBackend():
         for _ in range(max_load_workers):
             self.load_thread.submit(self.load_thread_func)
 
-    def get_images(self) -> Tuple[np.ndarray, List[str]]:
+    def get_images(self) -> tuple[np.ndarray, list[str]]:
         result = self.load_queue.get()
         self.load_queue_lenght -= 1
         return result
@@ -89,7 +87,7 @@ class SaveTagBackend():
         for _ in range(max_save_workers):
             self.save_thread.submit(self.save_thread_func)
 
-    def save(self, data: np.ndarray, path: List[str]) -> None:
+    def save(self, data: np.ndarray, path: list[str]) -> None:
         self.save_queue.put((data,path))
 
     def save_thread_func(self) -> None:

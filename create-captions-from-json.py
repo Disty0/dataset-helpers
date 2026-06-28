@@ -11,8 +11,6 @@ from glob import glob
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor
 
-from typing import Tuple
-
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 
 cleanup_start_list = (
@@ -117,7 +115,7 @@ cleanup_caption_list = (
 )
 
 
-def cleanup_word_repeats(caption: str) -> Tuple[str, str]:
+def cleanup_word_repeats(caption: str) -> tuple[str, str]:
     replace_words = None
     words = caption.split(" ")
     for i in range(len(words)):
@@ -143,7 +141,7 @@ def cleanup_word_repeats(caption: str) -> Tuple[str, str]:
         return caption, replace_string
 
 
-def cleanup_string_repeats(caption: str) -> Tuple[str, str]:
+def cleanup_string_repeats(caption: str) -> tuple[str, str]:
     replace_string = None
     for i in range(len(caption)):
         if caption[-(2*i):-i] == caption[-i:]:

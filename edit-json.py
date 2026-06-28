@@ -8,10 +8,6 @@ from tqdm import tqdm
 img_ext_list = ("jpg", "png", "webp", "jpeg", "jxl")
 
 key_to_remove_list = (
-    #"gemma-3n-e4b-it",
-    #"gemma-3-4b-it",
-    #"gemma-3-12b-it",
-    #"gemma-3-27b-it",
     #"gemma-4-e2b-it",
     #"gemma-4-e4b-it",
     #"gemma-4-31b-it",

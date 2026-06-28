@@ -26,8 +26,6 @@ except Exception:
     pass
 from PIL import Image # noqa: E402
 
-from typing import List, Tuple
-
 batch_size = 32
 use_tunable_ops = False
 use_torch_compile = True
@@ -69,13 +67,13 @@ class MLP(pl.LightningModule):
             torch.nn.Linear(32, 1)
         )
 
-    def forward(self, x: torch.FloatTensor) -> List[float]:
+    def forward(self, x: torch.FloatTensor) -> list[float]:
         out = self.layers(x).clamp(0, 10) / 10
         return out.cpu().numpy().reshape(-1).tolist()
 
 
 class ImageBackend():
-    def __init__(self, batches: List[List[str]], processor: CLIPProcessor, load_queue_lenght: int = 256, max_load_workers: int = 4):
+    def __init__(self, batches: list[list[str]], processor: CLIPProcessor, load_queue_lenght: int = 256, max_load_workers: int = 4):
         self.load_queue_lenght = 0
         self.keep_loading = True
         self.batches = Queue()
@@ -90,7 +88,7 @@ class ImageBackend():
         for _ in range(max_load_workers):
             self.load_thread.submit(self.load_thread_func)
 
-    def get_images(self) -> Tuple[torch.FloatTensor, List[str]]:
+    def get_images(self) -> tuple[torch.FloatTensor, list[str]]:
         result = self.load_queue.get()
         self.load_queue_lenght -= 1
         return result
@@ -127,7 +125,7 @@ class SaveAestheticBackend():
         for _ in range(max_save_workers):
             self.save_thread.submit(self.save_thread_func)
 
-    def save(self, data: List[float], path: List[str]) -> None:
+    def save(self, data: list[float], path: list[str]) -> None:
         self.save_queue.put((data,path))
 
     @torch.no_grad()
