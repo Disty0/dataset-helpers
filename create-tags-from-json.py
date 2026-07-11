@@ -216,9 +216,8 @@ def get_quality_tag(json_data: dict[str, int], caption_key: str) -> str:
             json_data.get("fav_count", json_data["score"]),
             danbooru_quality_scores[json_data.get(f"{caption_key}_rating", json_data["rating"])]
         )
-        if int(json_data["id"]) > 7000000:
-            wd_quality_score = get_aes_score(json_data.get("swinv2pv3_v0_448_ls0.2_x_percentile", 0), aes_deepghs_scores)
-            quality_score = max(quality_score, wd_quality_score)
+        wd_quality_score = get_aes_score(json_data.get("swinv2pv3_v0_448_ls0.2_x_percentile", 0), aes_deepghs_scores)
+        quality_score = max(quality_score, wd_quality_score)
     elif json_data.get("swinv2pv3_v0_448_ls0.2_x_percentile", None) is not None:
         quality_score = get_aes_score(json_data["swinv2pv3_v0_448_ls0.2_x_percentile"], aes_deepghs_scores)
     else:
